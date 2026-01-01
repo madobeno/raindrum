@@ -1,4 +1,4 @@
-import { Note, Theme } from './types';
+import { Note, Theme, Song } from './types';
 
 // 指定された11音のタングドラムレイアウト
 // 中央: C#4
@@ -44,6 +44,39 @@ export const NOTES: Note[] = rawNotes.map(n => ({
     top: n.pos.top,
     cloudLeft: n.cloud
 }));
+
+// きらきら星 メロディ配列
+export const TWINKLE_MELODY_IDS = [
+    'n_d4', 'n_d4', 'n_a4', 'n_a4', 'n_b4', 'n_b4', 'n_a4',
+    'n_g4', 'n_g4', 'n_f#4', 'n_f#4', 'n_e4', 'n_e4', 'n_d4',
+    'n_a4', 'n_a4', 'n_g4', 'n_g4', 'n_f#4', 'n_f#4', 'n_e4',
+    'n_a4', 'n_a4', 'n_g4', 'n_g4', 'n_f#4', 'n_f#4', 'n_e4',
+    'n_d4', 'n_d4', 'n_a4', 'n_a4', 'n_b4', 'n_b4', 'n_a4',
+    'n_g4', 'n_g4', 'n_f#4', 'n_f#4', 'n_e4', 'n_e4', 'n_d4'
+];
+
+const createTwinkleSong = (): Song => {
+    const tempo = 900; // ゆったりとしたテンポ
+    const notes = TWINKLE_MELODY_IDS.map((id, i) => {
+        let phraseOffset = Math.floor(i / 7) * tempo;
+        return {
+            timestamp: i * tempo + phraseOffset,
+            noteId: id
+        };
+    });
+
+    return {
+        id: 'demo_twinkle',
+        title: 'きらきら星 (Twinkle Star)',
+        date: 'Original',
+        notes: notes,
+        duration: TWINKLE_MELODY_IDS.length * tempo + (Math.floor(TWINKLE_MELODY_IDS.length / 7) * tempo) + 1000
+    };
+};
+
+export const DEMO_SONGS = {
+    twinkle: createTwinkleSong()
+};
 
 export const THEMES: Theme[] = [
   {

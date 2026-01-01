@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Play, Square, Circle, Music, Volume2, VolumeX, Sliders, CloudRain, Wind, Bird, Zap, Repeat, Palette, Clock, X, Settings, RotateCcw, Sparkles, HelpCircle, Droplets, Flame, Waves, Bug } from 'lucide-react';
+import { Play, Square, Circle, Music, Volume2, VolumeX, Sliders, CloudRain, Wind, Bird, Zap, Repeat, Palette, Clock, X, Settings, RotateCcw, Sparkles, HelpCircle, Droplets, Flame, Waves, Bug, BookOpen } from 'lucide-react';
 import { Note, RainDrop, Ripple, Song, RecordedNote, AmbienceType, AmbienceConfig, Theme, SoundType, NoteParticle } from './types';
-import { NOTES, THEMES, GRAVITY_SPEED, PAD_Y_PERCENT } from './constants';
+import { NOTES, THEMES, GRAVITY_SPEED, PAD_Y_PERCENT, DEMO_SONGS, TWINKLE_MELODY_IDS } from './constants';
 import { audioEngine } from './services/audioEngine';
 import RainVisualizer from './components/RainVisualizer';
 
@@ -34,6 +34,10 @@ const App: React.FC = () => {
   const [hitNote, setHitNote] = useState<string | null>(null);
   const [currentSoundType, setCurrentSoundType] = useState<SoundType>('Crystal');
 
+  // Practice Mode state
+  const [isPracticeMode, setIsPracticeMode] = useState(false);
+  const [practiceStep, setPracticeStep] = useState(0);
+
   const [ambience, setAmbience] = useState<Record<AmbienceType, AmbienceConfig>>({
     rain: { active: true, volume: 0.3 }, // STORM デフォルト 30%
     wind: { active: false, volume: 0.3 },
@@ -45,8 +49,8 @@ const App: React.FC = () => {
   });
   
   const requestRef = useRef<number>();
-  const playbackRef = useRef<{ active: boolean, startTime: number, notes: RecordedNote[], nextIndex: number, duration: number }>({
-    active: false, startTime: 0, notes: [], nextIndex: 0, duration: 0
+  const playbackRef = useRef<{ active: boolean, isDemo: boolean, startTime: number, notes: RecordedNote[], nextIndex: number, duration: number }>({
+    active: false, isDemo: false, startTime: 0, notes: [], nextIndex: 0, duration: 0
   });
 
   useEffect(() => {
@@ -162,7 +166,31 @@ const App: React.FC = () => {
         x: x, y: y, size: 14, opacity: 1.0,
         color: currentTheme.accentColor 
     }]);
-  }, [isMuted, currentTheme, currentSoundType, visualizeNotes]);
+
+    // Practice Mode Progress
+    if (isPracticeMode && noteId === TWINKLE_MELODY_IDS[practiceStep]) {
+        if (practiceStep < TWINKLE_MELODY_IDS.length - 1) {
+            setPracticeStep(s => s + 1);
+        } else {
+            // Completed!
+            const center = { x: dimensions.width / 2, y: dimensions.height / 2 };
+            const completionParticles: NoteParticle[] = [];
+            for (let i = 0; i < 30; i++) {
+                completionParticles.push({
+                    id: Math.random().toString(36),
+                    x: center.x + (Math.random() * 400 - 200),
+                    y: center.y + (Math.random() * 400 - 200),
+                    text: '★',
+                    opacity: 1,
+                    velocity: 0.5 + Math.random() * 2
+                });
+            }
+            setParticles(prev => [...prev, ...completionParticles]);
+            setIsPracticeMode(false);
+            setPracticeStep(0);
+        }
+    }
+  }, [isMuted, currentTheme, currentSoundType, visualizeNotes, isPracticeMode, practiceStep, dimensions]);
 
   const spawnDrop = async (noteId: string, shouldRecord = true) => {
     await handleInteraction();
@@ -261,6 +289,17 @@ const App: React.FC = () => {
     }
   };
 
+  const togglePracticeMode = () => {
+    if (isPracticeMode) {
+      setIsPracticeMode(false);
+      setPracticeStep(0);
+    } else {
+      setIsPracticeMode(true);
+      setPracticeStep(0);
+      if (isPlayingBack) stopPlayback();
+    }
+  };
+
   const saveSong = () => {
     const title = prompt("Melody Name:", `Rain Song ${savedSongs.length + 1}`);
     if (!title) return;
@@ -280,12 +319,13 @@ const App: React.FC = () => {
     playbackRef.current.active = false;
   };
 
-  const playSong = async (song: Song) => {
+  const playSong = async (song: Song, isDemo = false) => {
     await handleInteraction();
+    if (isPracticeMode) setIsPracticeMode(false);
     setIsPlayingBack(true);
     setCurrentSongTitle(song.title);
     playbackRef.current = {
-      active: true, startTime: Date.now(), notes: song.notes, nextIndex: 0,
+      active: true, isDemo: isDemo, startTime: Date.now(), notes: song.notes, nextIndex: 0,
       duration: song.duration || 5000
     };
     setShowSongs(false);
@@ -295,6 +335,8 @@ const App: React.FC = () => {
     setDrops([]);
     setRipples([]);
     setParticles([]);
+    setIsPracticeMode(false);
+    setPracticeStep(0);
     if (isPlayingBack) stopPlayback();
     if (isRecording) {
       setIsRecording(false);
@@ -369,12 +411,19 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Recording/Playback Indicators */}
+      {/* Indicators */}
       <div className="absolute top-8 left-1/2 transform -translate-x-1/2 z-40 flex flex-col items-center gap-3 w-full px-6">
         {isRecording && (
           <div className="bg-red-900/60 backdrop-blur-md px-5 py-2 rounded-full border border-red-500/50 flex items-center gap-3 shadow-xl">
               <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse shadow-[0_0_10px_#ef4444]"></div>
               <span className="text-red-100 font-mono text-sm tracking-[0.2em]">{formatTime(elapsedTime)}</span>
+          </div>
+        )}
+
+        {isPracticeMode && (
+          <div className="bg-blue-900/60 backdrop-blur-md px-5 py-2 rounded-full border border-blue-500/50 flex items-center gap-3 shadow-xl">
+              <BookOpen size={16} className="text-blue-300 animate-bounce" />
+              <span className="text-blue-100 font-mono text-sm tracking-[0.2em]">PRACTICE: {practiceStep + 1} / {TWINKLE_MELODY_IDS.length}</span>
           </div>
         )}
         
@@ -387,7 +436,7 @@ const App: React.FC = () => {
                 </div>
                 <div>
                   <div className="text-blue-100 font-medium text-sm tracking-wide truncate max-w-[150px]">{currentSongTitle}</div>
-                  <div className="text-blue-300/50 text-[10px] uppercase font-bold tracking-[0.1em]">Atmospheric Replay</div>
+                  <div className="text-blue-300/50 text-[10px] uppercase font-bold tracking-[0.1em]">{playbackRef.current.isDemo ? 'Auto Playing (Healing Tempo)' : 'Atmospheric Replay'}</div>
                 </div>
               </div>
               <button onClick={stopPlayback} className="p-2.5 bg-white/5 hover:bg-white/15 rounded-full text-white/60 transition-colors">
@@ -439,6 +488,9 @@ const App: React.FC = () => {
          {NOTES.map((note) => {
              const isActive = activeNote === note.id;
              const isHit = hitNote === note.id;
+             // Practice Highlight
+             const isPracticeTarget = isPracticeMode && TWINKLE_MELODY_IDS[practiceStep] === note.id;
+             
              return (
                <button 
                   key={note.id} 
@@ -450,9 +502,10 @@ const App: React.FC = () => {
                  <div className={`w-12 h-12 md:w-20 md:h-20 rounded-full border flex items-center justify-center transition-all duration-200 ${
                    isActive ? 'scale-90 bg-white/40 border-white shadow-[0_0_40px_rgba(255,255,255,0.8)]' : 
                    isHit ? 'scale-105 bg-white/20 border-white/60 shadow-[0_0_30px_rgba(255,255,255,0.6)]' :
+                   isPracticeTarget ? 'bg-blue-400/20 border-blue-400/60 animate-pulse scale-105 shadow-[0_0_30px_rgba(59,130,246,0.3)]' :
                    'bg-white/10 border-white/20 group-hover:border-white/40 group-hover:bg-white/15'
                  }`}>
-                    <span className={`text-[10px] md:text-xl font-bold pointer-events-none tracking-tight transition-colors ${isActive || isHit ? 'text-white' : 'text-white/60'}`}>{note.label}</span>
+                    <span className={`text-[10px] md:text-xl font-bold pointer-events-none tracking-tight transition-colors ${isActive || isHit ? 'text-white' : isPracticeTarget ? 'text-blue-300' : 'text-white/60'}`}>{note.label}</span>
                  </div>
                  {isHit && (
                    <div className="absolute inset-0 rounded-full border-2 border-white/30 animate-ping"></div>
@@ -473,6 +526,10 @@ const App: React.FC = () => {
             <div className="flex gap-4">
                 <button onClick={() => { setShowThemes(!showThemes); setShowMixer(false); setShowSoundSettings(false); setShowSongs(false); }} className={`p-4 rounded-full backdrop-blur-xl border transition-all ${showThemes ? 'bg-white/30 border-white text-white shadow-[0_0_15px_rgba(255,255,255,0.3)]' : 'bg-black/40 border-white/20 text-white/70 hover:bg-black/60'}`}><Palette size={22} /></button>
                 <button onClick={() => { setShowMixer(!showMixer); setShowThemes(false); setShowSoundSettings(false); setShowSongs(false); }} className={`p-4 rounded-full backdrop-blur-xl border transition-all ${showMixer ? 'bg-white/30 border-white text-white shadow-[0_0_15px_rgba(255,255,255,0.3)]' : 'bg-black/40 border-white/20 text-white/70 hover:bg-black/60'}`}><Sliders size={22} /></button>
+                <div className="flex bg-black/40 backdrop-blur-xl border border-white/10 rounded-full p-1">
+                    <button onClick={() => playSong(DEMO_SONGS.twinkle, true)} className={`p-3 rounded-full transition-all ${isPlayingBack && playbackRef.current.isDemo ? 'bg-yellow-500/30 text-yellow-300' : 'text-white/40 hover:text-white'}`} title="Auto Play Twinkle"><Sparkles size={18} /></button>
+                    <button onClick={togglePracticeMode} className={`p-3 rounded-full transition-all ${isPracticeMode ? 'bg-blue-500/30 text-blue-300' : 'text-white/40 hover:text-white'}`} title="Practice Twinkle"><BookOpen size={18} /></button>
+                </div>
             </div>
             
             <div className="flex gap-4">
@@ -501,9 +558,7 @@ const App: React.FC = () => {
         </div>
       </div>
 
-      {/* --- Popups --- */}
-      
-      {/* Settings Popup */}
+      {/* Popups */}
       {showSoundSettings && (
         <div className="absolute bottom-40 left-1/2 transform -translate-x-1/2 w-80 bg-black/90 backdrop-blur-3xl border border-white/20 rounded-[40px] p-8 z-50 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
             <div className="flex justify-between items-center mb-6">
@@ -536,7 +591,6 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Theme Selector */}
       {showThemes && (
         <div className="absolute bottom-40 left-1/2 transform -translate-x-1/2 w-80 bg-black/90 backdrop-blur-3xl border border-white/20 rounded-[40px] p-8 z-50 shadow-2xl animate-in slide-in-from-bottom-5">
             <div className="flex justify-between items-center mb-6">
@@ -554,7 +608,6 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Mixer Popup */}
       {showMixer && (
          <div className="absolute bottom-40 left-1/2 transform -translate-x-1/2 w-80 bg-black/90 backdrop-blur-3xl border border-white/20 rounded-[40px] p-8 z-50 shadow-2xl animate-in slide-in-from-bottom-5">
              <div className="flex justify-between items-center mb-6">
@@ -562,7 +615,6 @@ const App: React.FC = () => {
                <button onClick={() => setShowMixer(false)} className="text-white/20 hover:text-white transition-colors"><X size={20} /></button>
              </div>
              <div className="space-y-6 overflow-y-auto max-h-[40vh] pr-2 custom-scrollbar">
-                 {/* Density Control */}
                  <div className="space-y-4 p-5 bg-white/5 rounded-3xl border border-white/5">
                     <div className="flex items-center justify-between">
                        <div className="flex items-center gap-3 text-[11px] font-bold text-white tracking-widest uppercase">
@@ -613,7 +665,6 @@ const App: React.FC = () => {
          </div>
       )}
 
-      {/* Song Library */}
       {showSongs && (
           <div className="absolute bottom-40 left-1/2 transform -translate-x-1/2 w-[90%] max-w-md bg-black/95 backdrop-blur-3xl border border-white/20 rounded-[40px] p-8 z-50 shadow-2xl max-h-[60vh] overflow-y-auto animate-in slide-in-from-bottom-5">
             <div className="flex justify-between items-center mb-8 sticky top-0 bg-black/0 pb-4">
