@@ -1,3 +1,4 @@
+
 import { AmbienceType, SoundType } from "../types";
 
 class AudioEngine {
@@ -53,6 +54,17 @@ class AudioEngine {
       return this.context.resume();
     }
     return Promise.resolve();
+  }
+
+  public fadeOutMaster(duration: number, onComplete: () => void) {
+    if (!this.context || !this.masterGain) return;
+    const t = this.context.currentTime;
+    this.masterGain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+    setTimeout(() => {
+      onComplete();
+      // Restore gain for next session start
+      if (this.masterGain) this.masterGain.gain.setValueAtTime(0.7, this.context!.currentTime);
+    }, duration * 1000);
   }
 
   private createNoiseBuffer() {

@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Play, Square, Circle, Music, Volume2, VolumeX, Sliders, CloudRain, Wind, Bird, Zap, Repeat, Palette, Clock, X, Settings, RotateCcw, Sparkles, HelpCircle, Droplets, Flame, Waves, Bug, BookOpen, Headphones, AlertTriangle } from 'lucide-react';
+import { Play, Square, Circle, Music, Volume2, VolumeX, Sliders, CloudRain, Wind, Bird, Zap, Repeat, Palette, Clock, X, Settings, RotateCcw, Sparkles, HelpCircle, Droplets, Flame, Waves, Bug, BookOpen, Headphones, AlertTriangle, Moon } from 'lucide-react';
 import { Note, RainDrop, Ripple, Song, RecordedNote, AmbienceType, AmbienceConfig, Theme, SoundType, NoteParticle } from './types';
 import { NOTES, THEMES, GRAVITY_SPEED, PAD_Y_PERCENT, MASTERPIECES } from './constants';
 import { audioEngine } from './services/audioEngine';
@@ -28,9 +29,14 @@ const App: React.FC = () => {
   const [showThemes, setShowThemes] = useState(false);
   const [showSongs, setShowSongs] = useState(false);
   const [showSoundSettings, setShowSoundSettings] = useState(false);
+  const [showTimerMenu, setShowTimerMenu] = useState(false);
   const [showSongPicker, setShowSongPicker] = useState<{ mode: 'play' | 'practice' } | null>(null);
   const [activeNote, setActiveNote] = useState<string | null>(null);
   const [hitNote, setHitNote] = useState<string | null>(null);
+
+  // Timer state
+  const [timerSeconds, setTimerSeconds] = useState<number | null>(null);
+  const timerIntervalRef = useRef<number | null>(null);
 
   const [ambience, setAmbience] = useState<Record<AmbienceType, AmbienceConfig>>(() => {
     const saved = localStorage.getItem('raindrum_ambience');
@@ -98,6 +104,21 @@ const App: React.FC = () => {
     }
   }, [hasStarted]);
 
+  // Timer countdown logic
+  useEffect(() => {
+    if (timerSeconds !== null && timerSeconds > 0) {
+      timerIntervalRef.current = window.setInterval(() => {
+        setTimerSeconds(s => (s !== null && s > 0 ? s - 1 : 0));
+      }, 1000);
+    } else if (timerSeconds === 0) {
+      audioEngine.fadeOutMaster(10, () => resetScene());
+      setTimerSeconds(null);
+    }
+    return () => {
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    };
+  }, [timerSeconds]);
+
   useEffect(() => {
     let interval: number;
     if (isRecording) {
@@ -124,6 +145,12 @@ const App: React.FC = () => {
     const seconds = Math.floor(ms / 1000);
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
+
+  const formatTimer = (totalSeconds: number) => {
+    const m = Math.floor(totalSeconds / 60);
+    const s = totalSeconds % 60;
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
@@ -204,12 +231,9 @@ const App: React.FC = () => {
         color: currentTheme.accentColor 
     }]);
 
-    // Practice logic with transition delay to handle repeated notes better
     if (isPracticeMode && currentPracticeSong && !isStepTransitioning && noteId === currentPracticeSong.notes[practiceStep]?.noteId) {
         setIsStepTransitioning(true);
-        
         const isLastStep = practiceStep >= currentPracticeSong.notes.length - 1;
-        
         setTimeout(() => {
             if (!isLastStep) {
                 setPracticeStep(s => s + 1);
@@ -232,7 +256,7 @@ const App: React.FC = () => {
                 setPracticeStep(0);
                 setIsStepTransitioning(false);
             }
-        }, 400); // 400ms transition delay creates a visual break
+        }, 400);
     }
   }, [isMuted, currentTheme, currentSoundType, visualizeNotes, isPracticeMode, practiceStep, isStepTransitioning, currentPracticeSong, dimensions]);
 
@@ -382,6 +406,7 @@ const App: React.FC = () => {
     setIsPracticeMode(false);
     setPracticeStep(0);
     setIsStepTransitioning(false);
+    setTimerSeconds(null);
     if (isPlayingBack) stopPlayback();
     if (isRecording) {
       setIsRecording(false);
@@ -395,6 +420,7 @@ const App: React.FC = () => {
     setShowSoundSettings(false);
     setShowSongs(false);
     setShowSongPicker(null);
+    setShowTimerMenu(false);
   };
 
   if (!hasStarted) {
@@ -406,15 +432,9 @@ const App: React.FC = () => {
           <p className="text-lg sm:text-xl font-light text-forest-400">Harmonize with nature's rhythm.</p>
           <div className="space-y-4">
             <div className="p-4 bg-forest-800/50 rounded-lg text-sm text-forest-500 italic animate-pulse cursor-pointer border border-forest-600/30">Tap to Begin</div>
-            <div className="flex flex-col items-center gap-2 text-forest-500/80 animate-in fade-in slide-in-from-bottom-2 duration-1000">
-               <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] font-bold">
-                  <Headphones size={14} />
-                  <span>Headphones Recommended</span>
-               </div>
-               <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] font-bold text-yellow-500/60">
-                  <AlertTriangle size={12} />
-                  <span>Check Volume for Best Experience</span>
-               </div>
+            <div className="flex flex-col items-center gap-2 text-forest-500/80">
+               <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] font-bold"><Headphones size={14} /><span>Headphones Recommended</span></div>
+               <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] font-bold text-yellow-500/60"><AlertTriangle size={12} /><span>Check Volume for Best Experience</span></div>
             </div>
           </div>
         </div>
@@ -486,9 +506,17 @@ const App: React.FC = () => {
         )}
       </div>
 
-      {/* Top Right: System */}
+      {/* Top Right: System Stack */}
       <div className="absolute right-6 top-8 z-40 flex flex-col gap-3 items-center">
-        <button onClick={toggleMute} className={`p-3 rounded-full border transition-all ${isMuted ? 'bg-red-500/20 border-red-500/50 text-red-400' : 'bg-black/30 border-white/10 text-white/40 hover:text-white'}`}>{isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}</button>
+        <div className="flex flex-col gap-2 items-center bg-black/20 p-1.5 rounded-full border border-white/5 backdrop-blur-md">
+            <button onClick={toggleMute} className={`p-3 rounded-full border transition-all ${isMuted ? 'bg-red-500/20 border-red-500/50 text-red-400' : 'bg-transparent border-transparent text-white/40 hover:text-white'}`}>{isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}</button>
+            <div className="relative">
+              <button onClick={() => { if (showTimerMenu) closePopups(); else { closePopups(); setShowTimerMenu(true); } }} className={`p-3 rounded-full border transition-all ${timerSeconds !== null ? 'bg-blue-500/20 border-blue-500/50 text-blue-300' : 'bg-transparent border-transparent text-white/40 hover:text-white'}`}><Moon size={18} /></button>
+              {timerSeconds !== null && (
+                <div className="absolute top-full mt-1 left-1/2 -translate-x-1/2 whitespace-nowrap text-[8px] font-mono text-blue-300 bg-black/50 px-1 rounded">{formatTimer(timerSeconds)}</div>
+              )}
+            </div>
+        </div>
         <button onClick={resetScene} className="p-3 rounded-full bg-black/30 border border-white/10 text-white/40 hover:text-white transition-all group"><RotateCcw size={18} className="group-hover:rotate-[-90deg] transition-transform duration-500" /></button>
       </div>
 
@@ -507,13 +535,13 @@ const App: React.FC = () => {
         <button onClick={() => { if (showSoundSettings) closePopups(); else { closePopups(); setShowSoundSettings(true); } }} className={`p-4 rounded-full border transition-all ${showSoundSettings ? 'bg-white/20 text-white border-white' : 'bg-black/40 border-white/10 text-white/40'}`}><Settings size={22} /></button>
       </div>
 
-      {/* Bottom Center: Studio Dock */}
-      <div className="absolute bottom-12 left-1/2 transform -translate-x-1/2 z-40 flex items-center gap-4 bg-black/40 backdrop-blur-3xl border border-white/10 rounded-[40px] px-6 py-2 shadow-2xl">
-          <button onClick={() => { if (showSongs) closePopups(); else { closePopups(); setShowSongs(true); } }} className={`p-3 rounded-full transition-all ${showSongs ? 'text-forest-300' : 'text-white/30 hover:text-white'}`}><Music size={22} /></button>
-          <button onClick={toggleRecording} className={`relative p-5 rounded-full border transition-all duration-300 ${isRecording ? 'bg-red-500/30 border-red-500/50 scale-110' : 'bg-white/10 border-white/20'}`}>
-              {isRecording ? <Square size={24} fill="currentColor" className="text-red-500" /> : <Circle size={24} fill="currentColor" className="text-red-500" />}
+      {/* Bottom Center: Studio Dock (Optimized for Android) */}
+      <div className="absolute bottom-10 left-1/2 transform -translate-x-1/2 z-40 flex items-center gap-3 bg-black/40 backdrop-blur-3xl border border-white/10 rounded-[40px] px-4 py-1.5 shadow-2xl scale-95 sm:scale-100">
+          <button onClick={() => { if (showSongs) closePopups(); else { closePopups(); setShowSongs(true); } }} className={`p-2.5 rounded-full transition-all ${showSongs ? 'text-forest-300' : 'text-white/30 hover:text-white'}`}><Music size={20} /></button>
+          <button onClick={toggleRecording} className={`relative p-4 rounded-full border transition-all duration-300 ${isRecording ? 'bg-red-500/30 border-red-500/50 scale-105' : 'bg-white/5 border-white/10'}`}>
+              {isRecording ? <Square size={20} fill="currentColor" className="text-red-500" /> : <Circle size={20} fill="currentColor" className="text-red-500" />}
           </button>
-          <button onClick={() => setIsLooping(!isLooping)} className={`p-3 rounded-full transition-all ${isLooping ? 'text-blue-400' : 'text-white/30 hover:text-white'}`}><Repeat size={22} /></button>
+          <button onClick={() => setIsLooping(!isLooping)} className={`p-2.5 rounded-full transition-all ${isLooping ? 'text-blue-400' : 'text-white/30 hover:text-white'}`}><Repeat size={20} /></button>
       </div>
 
       {/* Main Drum */}
@@ -522,9 +550,7 @@ const App: React.FC = () => {
          {NOTES.map((note) => {
              const isActive = activeNote === note.id;
              const isHit = hitNote === note.id;
-             // Practice logic: Only show target if not currently transitioning to the next step
              const isPracticeTarget = isPracticeMode && !isStepTransitioning && currentPracticeSong?.notes[practiceStep]?.noteId === note.id;
-             
              return (
                <button key={note.id} onMouseDown={(e) => { e.stopPropagation(); spawnDrop(note.id); }} onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); spawnDrop(note.id); }} className="absolute transform -translate-x-1/2 -translate-y-1/2 flex items-center justify-center focus:outline-none group" style={{ left: `${note.left}%`, top: `${note.top}%` }}>
                  <div className={`w-12 h-12 md:w-20 md:h-20 rounded-full border flex items-center justify-center transition-all duration-200 ${
@@ -545,7 +571,26 @@ const App: React.FC = () => {
           <div className="w-full h-[2px] bg-white/20 absolute top-0 blur-[2px]"></div>
       </div>
 
-      {/* --- Popups with restored Close Buttons --- */}
+      {/* --- Popups --- */}
+
+      {showTimerMenu && (
+        <div className="absolute top-24 right-6 w-56 bg-black/95 backdrop-blur-3xl border border-white/20 rounded-[30px] p-6 z-50 shadow-2xl animate-in fade-in zoom-in-95">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-white/40 text-[9px] uppercase tracking-widest font-black">Sleep Timer</h3>
+            <button onClick={closePopups} className="text-white/20 hover:text-white transition-colors"><X size={16} /></button>
+          </div>
+          <div className="space-y-1.5">
+            {[10, 20, 30, 45, 60].map(min => (
+              <button key={min} onClick={() => { setTimerSeconds(min * 60); closePopups(); }} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center justify-between ${timerSeconds === min * 60 ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' : 'bg-white/5 text-white/60 border border-transparent'}`}>
+                {min} Minutes
+              </button>
+            ))}
+            {timerSeconds !== null && (
+              <button onClick={() => { setTimerSeconds(null); closePopups(); }} className="w-full text-center px-4 py-2 mt-2 text-[10px] uppercase font-black text-red-400/60 hover:text-red-400">Cancel Timer</button>
+            )}
+          </div>
+        </div>
+      )}
 
       {showSongPicker && (
         <div className="absolute bottom-40 right-6 w-64 bg-black/95 backdrop-blur-3xl border border-white/20 rounded-[30px] p-6 z-50 shadow-2xl animate-in slide-in-from-bottom-4 duration-300">
