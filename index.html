@@ -29,11 +29,16 @@
             animation: {
               'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
               'glow': 'glow 1.5s ease-in-out infinite alternate',
+              'background-drift': 'background-drift 40s ease-in-out infinite',
             },
             keyframes: {
               glow: {
                 '0%': { boxShadow: '0 0 5px #7abdb2' },
                 '100%': { boxShadow: '0 0 20px #d0f0eb, 0 0 10px #7abdb2' },
+              },
+              'background-drift': {
+                '0%, 100%': { transform: 'scale(1.0) translate(0, 0)' },
+                '50%': { transform: 'scale(1.1) translate(-1%, -1%)' }
               }
             }
           },
@@ -62,8 +67,6 @@
         background: #437d74; 
       }
     </style>
-
-<link rel="stylesheet" href="/index.css">
   <script type="importmap">
 {
   "imports": {
@@ -74,9 +77,8 @@
   }
 }
 </script>
-  <script type="module" crossorigin src="/raindrum/assets/index-D0nJNLqI.js"></script>
 </head>
   <body>
     <div id="root"></div>
-</body>
+  </body>
 </html>

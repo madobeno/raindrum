@@ -1,4 +1,5 @@
 {
   "name": "RainDrum: Forest Echoes",
-  "description": "A healing D-Major tongue drum application where rain composes the melody. Immersive forest atmosphere with recording capabilities."
+  "description": "A healing D-Major tongue drum application where rain composes the melody. Immersive forest atmosphere with recording capabilities.",
+  "requestFramePermissions": []
 }

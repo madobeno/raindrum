@@ -1,35 +1,44 @@
 import { Note, Theme } from './types';
 
-// Layout: Center + 10 notes in ring.
-// Sequence (Clockwise from Bottom): A3, E4, G4, B4, D5, B3, C#5, A4, F#4, D4
-// Center: C#3
+// 指定された11音のタングドラムレイアウト
+// 中央: C#4
+// 下から時計回り: A3, E4, G4, B4, D5, B3, C#5, A4, F#4, D4
 
-const radius = 38; // %
 const degToRad = (deg: number) => deg * (Math.PI / 180);
-const getPos = (deg: number) => ({
-    left: 50 + radius * Math.cos(degToRad(deg)),
-    top: 50 + radius * Math.sin(degToRad(deg))
-});
+
+const ringRadius = 38; 
+
+// 角度の計算 (下 90度から時計回りに36度ずつ配置)
+const getPos = (index: number) => {
+    const angle = 90 + (index * 36); 
+    return {
+        left: 50 + ringRadius * Math.cos(degToRad(angle)),
+        top: 50 + ringRadius * Math.sin(degToRad(angle))
+    };
+};
 
 const rawNotes = [
-    { id: 'n_center', name: 'C#3', freq: 138.59, cloud: 5, pos: {left: 50, top: 50} },
-    { id: 'n1', name: 'A3', freq: 220.00, cloud: 14, pos: getPos(90) },
-    { id: 'n2', name: 'E4', freq: 329.63, cloud: 23, pos: getPos(126) },
-    { id: 'n3', name: 'G4', freq: 392.00, cloud: 32, pos: getPos(162) },
-    { id: 'n4', name: 'B4', freq: 493.88, cloud: 41, pos: getPos(198) },
-    { id: 'n5', name: 'D5', freq: 587.33, cloud: 50, pos: getPos(234) },
-    { id: 'n6', name: 'B3', freq: 246.94, cloud: 59, pos: getPos(270) },
-    { id: 'n7', name: 'C#5', freq: 554.37, cloud: 68, pos: getPos(306) },
-    { id: 'n8', name: 'A4', freq: 440.00, cloud: 77, pos: getPos(342) },
-    { id: 'n9', name: 'F#4', freq: 369.99, cloud: 86, pos: getPos(18) },
-    { id: 'n10', name: 'D4', freq: 293.66, cloud: 95, pos: getPos(54) },
+    // 中央
+    { id: 'n_c#4', name: 'C#4', freq: 277.18, label: 'C#4', cloud: 50, pos: { left: 50, top: 50 } },
+    
+    // 外周 10音 (下 90度から時計回り)
+    { id: 'n_a3',   name: 'A3',   freq: 220.00, label: 'A3',   cloud: 50, pos: getPos(0) },
+    { id: 'n_e4',   name: 'E4',   freq: 329.63, label: 'E4',   cloud: 25, pos: getPos(1) },
+    { id: 'n_g4',   name: 'G4',   freq: 392.00, label: 'G4',   cloud: 10, pos: getPos(2) },
+    { id: 'n_b4',   name: 'B4',   freq: 493.88, label: 'B4',   cloud: 15, pos: getPos(3) },
+    { id: 'n_d5',   name: 'D5',   freq: 587.33, label: 'D5',   cloud: 30, pos: getPos(4) },
+    { id: 'n_b3',   name: 'B3',   freq: 246.94, label: 'B3',   cloud: 50, pos: getPos(5) },
+    { id: 'n_c#5',  name: 'C#5',  freq: 554.37, label: 'C#5',  cloud: 70, pos: getPos(6) },
+    { id: 'n_a4',   name: 'A4',   freq: 440.00, label: 'A4',   cloud: 85, pos: getPos(7) },
+    { id: 'n_f#4',  name: 'F#4',  freq: 369.99, label: 'F#4',  cloud: 90, pos: getPos(8) },
+    { id: 'n_d4',   name: 'D4',   freq: 293.66, label: 'D4',   cloud: 75, pos: getPos(9) },
 ];
 
 export const NOTES: Note[] = rawNotes.map(n => ({
     id: n.id,
     name: n.name,
     frequency: n.freq,
-    label: n.name,
+    label: n.label,
     color: '#a5b4fc', 
     left: n.pos.left,
     top: n.pos.top,

@@ -24,7 +24,7 @@ const App: React.FC = () => {
   const [isLooping, setIsLooping] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [visualizeNotes, setVisualizeNotes] = useState(true);
-  const [rainDensity, setRainDensity] = useState(0); 
+  const [rainDensity, setRainDensity] = useState(0); // デフォルト 0%
   const [showMixer, setShowMixer] = useState(false);
   const [showThemes, setShowThemes] = useState(false);
   const [showSongs, setShowSongs] = useState(false);
@@ -35,7 +35,7 @@ const App: React.FC = () => {
   const [currentSoundType, setCurrentSoundType] = useState<SoundType>('Crystal');
 
   const [ambience, setAmbience] = useState<Record<AmbienceType, AmbienceConfig>>({
-    rain: { active: true, volume: 0.5 },
+    rain: { active: true, volume: 0.3 }, // STORM デフォルト 30%
     wind: { active: false, volume: 0.3 },
     birds: { active: false, volume: 0.3 },
     thunder: { active: false, volume: 0.6 },
@@ -199,7 +199,8 @@ const App: React.FC = () => {
         const newY = drop.y + drop.speed;
         if (!drop.hasHit && newY >= drop.targetY) {
           handleHit(drop.noteId, drop.x, drop.targetY);
-        } else if (newY < dimensions.height + 100) {
+          nextDrops.push({ ...drop, hasHit: true, y: drop.targetY });
+        } else if (!drop.hasHit && newY < dimensions.height + 100) {
           nextDrops.push({ ...drop, y: newY });
         }
       });
@@ -305,9 +306,9 @@ const App: React.FC = () => {
     return (
       <div className="flex flex-col items-center justify-center h-screen w-full bg-[#0a1f1c] text-forest-100 relative overflow-hidden" onClick={startExperience}>
         <div className="absolute inset-0 z-0 opacity-40 bg-[url('https://images.unsplash.com/photo-1511497584788-876760111969?ixlib=rb-4.0.3&auto=format&fit=crop&w=2000&q=80')] bg-cover bg-center"></div>
-        <div className="z-10 text-center space-y-8 p-12 max-w-lg bg-[#0a1f1c]/80 backdrop-blur-2xl rounded-3xl border border-forest-600 shadow-2xl">
-          <h1 className="text-6xl font-extralight tracking-[0.2em] text-transparent bg-clip-text bg-gradient-to-r from-forest-300 to-rain-300">RAINDRUM</h1>
-          <p className="text-xl font-light text-forest-400">Harmonize with nature's rhythm.</p>
+        <div className="z-10 text-center space-y-8 p-12 max-w-lg bg-[#0a1f1c]/80 backdrop-blur-2xl rounded-3xl border border-forest-600 shadow-2xl mx-4">
+          <h1 className="text-3xl sm:text-5xl font-extralight tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-forest-300 to-rain-300 uppercase leading-normal">RAINDRUM</h1>
+          <p className="text-lg sm:text-xl font-light text-forest-400">Harmonize with nature's rhythm.</p>
           <div className="p-4 bg-forest-800/50 rounded-lg text-sm text-forest-500 italic animate-pulse cursor-pointer">Tap to Begin</div>
         </div>
       </div>
@@ -327,7 +328,7 @@ const App: React.FC = () => {
 
   return (
     <div className={`relative h-screen w-full bg-gradient-to-b ${currentTheme.bgGradient} select-none transition-all duration-1000 overflow-hidden`} onMouseDown={handleInteraction} onTouchStart={handleInteraction}>
-      <div className="absolute inset-0 opacity-60 pointer-events-none transition-opacity duration-1000" style={{ backgroundImage: `url(${currentTheme.bgImage})`, backgroundSize: 'cover', backgroundPosition: 'center' }}></div>
+      <div className={`absolute inset-0 opacity-60 pointer-events-none transition-opacity duration-1000 animate-background-drift`} style={{ backgroundImage: `url(${currentTheme.bgImage})`, backgroundSize: 'cover', backgroundPosition: 'center' }}></div>
 
       <RainVisualizer drops={drops} ripples={ripples} particles={particles} notes={NOTES} canvasWidth={dimensions.width} canvasHeight={dimensions.height} theme={currentTheme} />
 
@@ -413,7 +414,7 @@ const App: React.FC = () => {
         ))}
       </div>
 
-      {/* Help - Top Left (Separated to avoid overlap) */}
+      {/* Help - Top Left */}
       <button 
         onClick={() => setShowTutorial(true)} 
         className="absolute left-6 top-8 z-40 p-3 rounded-full bg-black/30 border border-white/10 text-white/40 hover:text-white hover:bg-black/50 transition-all hover:scale-110"
@@ -422,7 +423,7 @@ const App: React.FC = () => {
         <HelpCircle size={18} />
       </button>
 
-      {/* Reset - Top Right (Separated to avoid overlap) */}
+      {/* Reset - Top Right */}
       <button 
         onClick={resetScene} 
         className="absolute right-6 top-8 z-40 p-3 rounded-full bg-black/30 border border-white/10 text-white/40 hover:text-white hover:bg-black/50 transition-all hover:scale-110 group"
@@ -446,12 +447,12 @@ const App: React.FC = () => {
                   className="absolute transform -translate-x-1/2 -translate-y-1/2 flex items-center justify-center focus:outline-none group" 
                   style={{ left: `${note.left}%`, top: `${note.top}%` }}
                >
-                 <div className={`w-14 h-14 md:w-18 md:h-18 rounded-full border flex items-center justify-center transition-all duration-200 ${
+                 <div className={`w-12 h-12 md:w-20 md:h-20 rounded-full border flex items-center justify-center transition-all duration-200 ${
                    isActive ? 'scale-90 bg-white/40 border-white shadow-[0_0_40px_rgba(255,255,255,0.8)]' : 
                    isHit ? 'scale-105 bg-white/20 border-white/60 shadow-[0_0_30px_rgba(255,255,255,0.6)]' :
                    'bg-white/10 border-white/20 group-hover:border-white/40 group-hover:bg-white/15'
                  }`}>
-                    <span className={`text-[10px] md:text-xs font-bold pointer-events-none tracking-tight transition-colors ${isActive || isHit ? 'text-white' : 'text-white/60'}`}>{note.label}</span>
+                    <span className={`text-[10px] md:text-xl font-bold pointer-events-none tracking-tight transition-colors ${isActive || isHit ? 'text-white' : 'text-white/60'}`}>{note.label}</span>
                  </div>
                  {isHit && (
                    <div className="absolute inset-0 rounded-full border-2 border-white/30 animate-ping"></div>
