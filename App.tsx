@@ -82,6 +82,7 @@ const App: React.FC = () => {
 
   const [isPracticeMode, setIsPracticeMode] = useState(false);
   const [practiceStep, setPracticeStep] = useState(0);
+  const [isStepTransitioning, setIsStepTransitioning] = useState(false);
   const [currentPracticeSong, setCurrentPracticeSong] = useState<Song | null>(null);
   
   const requestRef = useRef<number>(null);
@@ -203,28 +204,37 @@ const App: React.FC = () => {
         color: currentTheme.accentColor 
     }]);
 
-    if (isPracticeMode && currentPracticeSong && noteId === currentPracticeSong.notes[practiceStep]?.noteId) {
-        if (practiceStep < currentPracticeSong.notes.length - 1) {
-            setPracticeStep(s => s + 1);
-        } else {
-            const center = { x: dimensions.width / 2, y: dimensions.height / 2 };
-            const completionParticles: NoteParticle[] = [];
-            for (let i = 0; i < 40; i++) {
-                completionParticles.push({
-                    id: Math.random().toString(36),
-                    x: center.x + (Math.random() * 600 - 300),
-                    y: center.y + (Math.random() * 600 - 300),
-                    text: '★',
-                    opacity: 1,
-                    velocity: 0.3 + Math.random() * 2.5
-                });
+    // Practice logic with transition delay to handle repeated notes better
+    if (isPracticeMode && currentPracticeSong && !isStepTransitioning && noteId === currentPracticeSong.notes[practiceStep]?.noteId) {
+        setIsStepTransitioning(true);
+        
+        const isLastStep = practiceStep >= currentPracticeSong.notes.length - 1;
+        
+        setTimeout(() => {
+            if (!isLastStep) {
+                setPracticeStep(s => s + 1);
+                setIsStepTransitioning(false);
+            } else {
+                const center = { x: dimensions.width / 2, y: dimensions.height / 2 };
+                const completionParticles: NoteParticle[] = [];
+                for (let i = 0; i < 40; i++) {
+                    completionParticles.push({
+                        id: Math.random().toString(36),
+                        x: center.x + (Math.random() * 600 - 300),
+                        y: center.y + (Math.random() * 600 - 300),
+                        text: '★',
+                        opacity: 1,
+                        velocity: 0.3 + Math.random() * 2.5
+                    });
+                }
+                setParticles(prev => [...prev, ...completionParticles]);
+                setIsPracticeMode(false);
+                setPracticeStep(0);
+                setIsStepTransitioning(false);
             }
-            setParticles(prev => [...prev, ...completionParticles]);
-            setIsPracticeMode(false);
-            setPracticeStep(0);
-        }
+        }, 400); // 400ms transition delay creates a visual break
     }
-  }, [isMuted, currentTheme, currentSoundType, visualizeNotes, isPracticeMode, practiceStep, currentPracticeSong, dimensions]);
+  }, [isMuted, currentTheme, currentSoundType, visualizeNotes, isPracticeMode, practiceStep, isStepTransitioning, currentPracticeSong, dimensions]);
 
   const spawnDrop = async (noteId: string, shouldRecord = true) => {
     await handleInteraction();
@@ -328,6 +338,7 @@ const App: React.FC = () => {
   const startPractice = (song: Song) => {
     setIsPracticeMode(true);
     setPracticeStep(0);
+    setIsStepTransitioning(false);
     setCurrentPracticeSong(song);
     closePopups();
     if (isPlayingBack) stopPlayback();
@@ -370,6 +381,7 @@ const App: React.FC = () => {
     setParticles([]);
     setIsPracticeMode(false);
     setPracticeStep(0);
+    setIsStepTransitioning(false);
     if (isPlayingBack) stopPlayback();
     if (isRecording) {
       setIsRecording(false);
@@ -510,16 +522,18 @@ const App: React.FC = () => {
          {NOTES.map((note) => {
              const isActive = activeNote === note.id;
              const isHit = hitNote === note.id;
-             const isPracticeTarget = isPracticeMode && currentPracticeSong?.notes[practiceStep]?.noteId === note.id;
+             // Practice logic: Only show target if not currently transitioning to the next step
+             const isPracticeTarget = isPracticeMode && !isStepTransitioning && currentPracticeSong?.notes[practiceStep]?.noteId === note.id;
+             
              return (
                <button key={note.id} onMouseDown={(e) => { e.stopPropagation(); spawnDrop(note.id); }} onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); spawnDrop(note.id); }} className="absolute transform -translate-x-1/2 -translate-y-1/2 flex items-center justify-center focus:outline-none group" style={{ left: `${note.left}%`, top: `${note.top}%` }}>
                  <div className={`w-12 h-12 md:w-20 md:h-20 rounded-full border flex items-center justify-center transition-all duration-200 ${
                    isActive ? 'scale-90 bg-white/40 border-white shadow-[0_0_40px_rgba(255,255,255,0.8)]' : 
                    isHit ? 'scale-105 bg-white/20 border-white/60 shadow-[0_0_30px_rgba(255,255,255,0.6)]' :
-                   isPracticeTarget ? 'bg-blue-400/20 border-blue-400/60 animate-pulse scale-105 shadow-[0_0_30px_rgba(59,130,246,0.3)]' :
+                   isPracticeTarget ? 'bg-blue-400/20 border-blue-400/60 animate-pulse scale-110 shadow-[0_0_40px_rgba(59,130,246,0.4)]' :
                    'bg-white/10 border-white/20 group-hover:border-white/40'
                  }`}>
-                    <span className={`text-[10px] md:text-xl font-bold pointer-events-none tracking-tight ${isActive || isHit ? 'text-white' : isPracticeTarget ? 'text-blue-300' : 'text-white/60'}`}>{note.label}</span>
+                    <span className={`text-[10px] md:text-xl font-bold pointer-events-none tracking-tight ${isActive || isHit ? 'text-white' : isPracticeTarget ? 'text-blue-300 scale-110' : 'text-white/60'}`}>{note.label}</span>
                  </div>
                </button>
              );
