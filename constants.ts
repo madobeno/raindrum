@@ -1,14 +1,8 @@
 import { Note, Theme, Song } from './types';
 
 // 指定された11音のタングドラムレイアウト
-// 中央: C#4
-// 下から時計回り: A3, E4, G4, B4, D5, B3, C#5, A4, F#4, D4
-
 const degToRad = (deg: number) => deg * (Math.PI / 180);
-
 const ringRadius = 38; 
-
-// 角度の計算 (下 90度から時計回りに36度ずつ配置)
 const getPos = (index: number) => {
     const angle = 90 + (index * 36); 
     return {
@@ -18,10 +12,7 @@ const getPos = (index: number) => {
 };
 
 const rawNotes = [
-    // 中央
     { id: 'n_c#4', name: 'C#4', freq: 277.18, label: 'C#4', cloud: 50, pos: { left: 50, top: 50 } },
-    
-    // 外周 10音 (下 90度から時計回り)
     { id: 'n_a3',   name: 'A3',   freq: 220.00, label: 'A3',   cloud: 50, pos: getPos(0) },
     { id: 'n_e4',   name: 'E4',   freq: 329.63, label: 'E4',   cloud: 25, pos: getPos(1) },
     { id: 'n_g4',   name: 'G4',   freq: 392.00, label: 'G4',   cloud: 10, pos: getPos(2) },
@@ -45,37 +36,62 @@ export const NOTES: Note[] = rawNotes.map(n => ({
     cloudLeft: n.cloud
 }));
 
-// きらきら星 メロディ配列
-export const TWINKLE_MELODY_IDS = [
+// 曲生成ヘルパー
+const createSong = (id: string, title: string, melody: string[], tempo: number = 900): Song => {
+  return {
+    id,
+    title,
+    date: 'Masterpiece',
+    notes: melody.map((noteId, i) => ({
+      timestamp: i * tempo,
+      noteId
+    })),
+    duration: melody.length * tempo + 2000
+  };
+};
+
+export const MASTERPIECES: Song[] = [
+  createSong('twinkle', 'きらきら星', [
     'n_d4', 'n_d4', 'n_a4', 'n_a4', 'n_b4', 'n_b4', 'n_a4',
     'n_g4', 'n_g4', 'n_f#4', 'n_f#4', 'n_e4', 'n_e4', 'n_d4',
     'n_a4', 'n_a4', 'n_g4', 'n_g4', 'n_f#4', 'n_f#4', 'n_e4',
     'n_a4', 'n_a4', 'n_g4', 'n_g4', 'n_f#4', 'n_f#4', 'n_e4',
     'n_d4', 'n_d4', 'n_a4', 'n_a4', 'n_b4', 'n_b4', 'n_a4',
     'n_g4', 'n_g4', 'n_f#4', 'n_f#4', 'n_e4', 'n_e4', 'n_d4'
+  ], 900),
+
+  createSong('frog', 'かえるの合唱', [
+    'n_d4', 'n_e4', 'n_f#4', 'n_g4', 'n_f#4', 'n_e4', 'n_d4',
+    'n_f#4', 'n_g4', 'n_a4', 'n_b4', 'n_a4', 'n_g4', 'n_f#4',
+    'n_d4', 'n_d4', 'n_d4', 'n_d4',
+    'n_d4', 'n_d4', 'n_e4', 'n_e4', 'n_f#4', 'n_f#4', 'n_g4', 'n_g4',
+    'n_f#4', 'n_e4', 'n_d4'
+  ], 1100),
+
+  createSong('london_bridge', 'ロンドン橋落ちた', [
+    'n_a4', 'n_b4', 'n_a4', 'n_g4', 'n_f#4', 'n_g4', 'n_a4',
+    'n_e4', 'n_f#4', 'n_g4', 'n_f#4', 'n_g4', 'n_a4',
+    'n_a4', 'n_b4', 'n_a4', 'n_g4', 'n_f#4', 'n_g4', 'n_a4',
+    'n_e4', 'n_a4', 'n_f#4', 'n_d4'
+  ], 1200),
+
+  createSong('mary', 'メリーさんのひつじ', [
+    'n_f#4', 'n_e4', 'n_d4', 'n_e4', 'n_f#4', 'n_f#4', 'n_f#4',
+    'n_e4', 'n_e4', 'n_e4', 'n_f#4', 'n_a4', 'n_a4',
+    'n_f#4', 'n_e4', 'n_d4', 'n_e4', 'n_f#4', 'n_f#4', 'n_f#4',
+    'n_f#4', 'n_e4', 'n_e4', 'n_f#4', 'n_e4', 'n_d4'
+  ], 850),
+
+  createSong('lullaby', 'ブラームスの子守唄', [
+    'n_f#4', 'n_f#4', 'n_a4', 'n_f#4', 'n_f#4', 'n_a4',
+    'n_f#4', 'n_a4', 'n_d5', 'n_c#5', 'n_b4', 'n_b4', 'n_a4',
+    'n_e4', 'n_f#4', 'n_g4', 'n_e4', 'n_f#4', 'n_g4',
+    'n_e4', 'n_g4', 'n_c#5', 'n_b4', 'n_a4', 'n_c#5', 'n_d5'
+  ], 1100)
 ];
 
-const createTwinkleSong = (): Song => {
-    const tempo = 900; // ゆったりとしたテンポ
-    const notes = TWINKLE_MELODY_IDS.map((id, i) => {
-        let phraseOffset = Math.floor(i / 7) * tempo;
-        return {
-            timestamp: i * tempo + phraseOffset,
-            noteId: id
-        };
-    });
-
-    return {
-        id: 'demo_twinkle',
-        title: 'きらきら星 (Twinkle Star)',
-        date: 'Original',
-        notes: notes,
-        duration: TWINKLE_MELODY_IDS.length * tempo + (Math.floor(TWINKLE_MELODY_IDS.length / 7) * tempo) + 1000
-    };
-};
-
 export const DEMO_SONGS = {
-    twinkle: createTwinkleSong()
+    twinkle: MASTERPIECES[0]
 };
 
 export const THEMES: Theme[] = [
@@ -89,13 +105,13 @@ export const THEMES: Theme[] = [
     accentColor: '#86efac'
   },
   {
-    id: 'bird_sanctuary',
-    name: '小鳥のさえずり (Bird Sanctuary)',
-    bgGradient: 'from-[#064e3b] via-[#3f6212] to-[#064e3b]',
-    bgImage: 'https://images.unsplash.com/photo-1444464666168-49d633b867ad?auto=format&fit=crop&w=2000&q=80',
-    drumColor: 'rgba(63, 98, 18, 0.85)',
-    rainColor: 'rgba(254, 243, 199, 0.95)',
-    accentColor: '#fde047'
+    id: 'deep_space',
+    name: '深宇宙 (Deep Space)',
+    bgGradient: 'from-[#020617] via-[#1e1b4b] to-[#020617]',
+    bgImage: 'https://images.unsplash.com/photo-1464802686167-b939a6910659?auto=format&fit=crop&w=2000&q=80',
+    drumColor: 'rgba(30, 27, 75, 0.85)',
+    rainColor: 'rgba(232, 240, 255, 0.95)',
+    accentColor: '#c084fc'
   },
   {
     id: 'waterfall',

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Play, Square, Circle, Music, Volume2, VolumeX, Sliders, CloudRain, Wind, Bird, Zap, Repeat, Palette, Clock, X, Settings, RotateCcw, Sparkles, HelpCircle, Droplets, Flame, Waves, Bug, BookOpen } from 'lucide-react';
+import { Play, Square, Circle, Music, Volume2, VolumeX, Sliders, CloudRain, Wind, Bird, Zap, Repeat, Palette, Clock, X, Settings, RotateCcw, Sparkles, HelpCircle, Droplets, Flame, Waves, Bug, BookOpen, Headphones, AlertTriangle } from 'lucide-react';
 import { Note, RainDrop, Ripple, Song, RecordedNote, AmbienceType, AmbienceConfig, Theme, SoundType, NoteParticle } from './types';
-import { NOTES, THEMES, GRAVITY_SPEED, PAD_Y_PERCENT, DEMO_SONGS, TWINKLE_MELODY_IDS } from './constants';
+import { NOTES, THEMES, GRAVITY_SPEED, PAD_Y_PERCENT, MASTERPIECES } from './constants';
 import { audioEngine } from './services/audioEngine';
 import RainVisualizer from './components/RainVisualizer';
 
@@ -24,31 +24,67 @@ const App: React.FC = () => {
   const [isLooping, setIsLooping] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [visualizeNotes, setVisualizeNotes] = useState(true);
-  const [rainDensity, setRainDensity] = useState(0); // デフォルト 0%
   const [showMixer, setShowMixer] = useState(false);
   const [showThemes, setShowThemes] = useState(false);
   const [showSongs, setShowSongs] = useState(false);
   const [showSoundSettings, setShowSoundSettings] = useState(false);
-  const [currentTheme, setCurrentTheme] = useState<Theme>(THEMES[0]);
+  const [showSongPicker, setShowSongPicker] = useState<{ mode: 'play' | 'practice' } | null>(null);
   const [activeNote, setActiveNote] = useState<string | null>(null);
   const [hitNote, setHitNote] = useState<string | null>(null);
-  const [currentSoundType, setCurrentSoundType] = useState<SoundType>('Crystal');
 
-  // Practice Mode state
+  const [ambience, setAmbience] = useState<Record<AmbienceType, AmbienceConfig>>(() => {
+    const saved = localStorage.getItem('raindrum_ambience');
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) { console.error(e); }
+    }
+    return {
+      rain: { active: true, volume: 0.3 }, 
+      wind: { active: false, volume: 0.3 },
+      birds: { active: false, volume: 0.3 },
+      thunder: { active: false, volume: 0.6 },
+      ocean: { active: false, volume: 0.4 },
+      fire: { active: false, volume: 0.3 },
+      crickets: { active: false, volume: 0.2 },
+    };
+  });
+
+  const [rainDensity, setRainDensity] = useState<number>(() => {
+    const saved = localStorage.getItem('raindrum_rain_density');
+    return saved ? parseFloat(saved) : 0.1;
+  });
+
+  const [currentTheme, setCurrentTheme] = useState<Theme>(() => {
+    const savedId = localStorage.getItem('raindrum_theme_id');
+    const theme = THEMES.find(t => t.id === savedId);
+    return theme || THEMES[0];
+  });
+
+  const [currentSoundType, setCurrentSoundType] = useState<SoundType>(() => {
+    const saved = localStorage.getItem('raindrum_sound_type');
+    return (saved as SoundType) || 'Crystal';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('raindrum_ambience', JSON.stringify(ambience));
+  }, [ambience]);
+
+  useEffect(() => {
+    localStorage.setItem('raindrum_rain_density', rainDensity.toString());
+  }, [rainDensity]);
+
+  useEffect(() => {
+    localStorage.setItem('raindrum_theme_id', currentTheme.id);
+  }, [currentTheme]);
+
+  useEffect(() => {
+    localStorage.setItem('raindrum_sound_type', currentSoundType);
+  }, [currentSoundType]);
+
   const [isPracticeMode, setIsPracticeMode] = useState(false);
   const [practiceStep, setPracticeStep] = useState(0);
-
-  const [ambience, setAmbience] = useState<Record<AmbienceType, AmbienceConfig>>({
-    rain: { active: true, volume: 0.3 }, // STORM デフォルト 30%
-    wind: { active: false, volume: 0.3 },
-    birds: { active: false, volume: 0.3 },
-    thunder: { active: false, volume: 0.6 },
-    ocean: { active: false, volume: 0.4 },
-    fire: { active: false, volume: 0.3 },
-    crickets: { active: false, volume: 0.2 },
-  });
+  const [currentPracticeSong, setCurrentPracticeSong] = useState<Song | null>(null);
   
-  const requestRef = useRef<number>();
+  const requestRef = useRef<number>(null);
   const playbackRef = useRef<{ active: boolean, isDemo: boolean, startTime: number, notes: RecordedNote[], nextIndex: number, duration: number }>({
     active: false, isDemo: false, startTime: 0, notes: [], nextIndex: 0, duration: 0
   });
@@ -167,22 +203,20 @@ const App: React.FC = () => {
         color: currentTheme.accentColor 
     }]);
 
-    // Practice Mode Progress
-    if (isPracticeMode && noteId === TWINKLE_MELODY_IDS[practiceStep]) {
-        if (practiceStep < TWINKLE_MELODY_IDS.length - 1) {
+    if (isPracticeMode && currentPracticeSong && noteId === currentPracticeSong.notes[practiceStep]?.noteId) {
+        if (practiceStep < currentPracticeSong.notes.length - 1) {
             setPracticeStep(s => s + 1);
         } else {
-            // Completed!
             const center = { x: dimensions.width / 2, y: dimensions.height / 2 };
             const completionParticles: NoteParticle[] = [];
-            for (let i = 0; i < 30; i++) {
+            for (let i = 0; i < 40; i++) {
                 completionParticles.push({
                     id: Math.random().toString(36),
-                    x: center.x + (Math.random() * 400 - 200),
-                    y: center.y + (Math.random() * 400 - 200),
+                    x: center.x + (Math.random() * 600 - 300),
+                    y: center.y + (Math.random() * 600 - 300),
                     text: '★',
                     opacity: 1,
-                    velocity: 0.5 + Math.random() * 2
+                    velocity: 0.3 + Math.random() * 2.5
                 });
             }
             setParticles(prev => [...prev, ...completionParticles]);
@@ -190,7 +224,7 @@ const App: React.FC = () => {
             setPracticeStep(0);
         }
     }
-  }, [isMuted, currentTheme, currentSoundType, visualizeNotes, isPracticeMode, practiceStep, dimensions]);
+  }, [isMuted, currentTheme, currentSoundType, visualizeNotes, isPracticeMode, practiceStep, currentPracticeSong, dimensions]);
 
   const spawnDrop = async (noteId: string, shouldRecord = true) => {
     await handleInteraction();
@@ -275,7 +309,9 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (hasStarted) requestRef.current = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(requestRef.current!);
+    return () => {
+      if (requestRef.current) cancelAnimationFrame(requestRef.current);
+    }
   }, [hasStarted, dimensions, isLooping, drops.length, visualizeNotes]);
 
   const toggleRecording = () => {
@@ -289,15 +325,12 @@ const App: React.FC = () => {
     }
   };
 
-  const togglePracticeMode = () => {
-    if (isPracticeMode) {
-      setIsPracticeMode(false);
-      setPracticeStep(0);
-    } else {
-      setIsPracticeMode(true);
-      setPracticeStep(0);
-      if (isPlayingBack) stopPlayback();
-    }
+  const startPractice = (song: Song) => {
+    setIsPracticeMode(true);
+    setPracticeStep(0);
+    setCurrentPracticeSong(song);
+    closePopups();
+    if (isPlayingBack) stopPlayback();
   };
 
   const saveSong = () => {
@@ -328,7 +361,7 @@ const App: React.FC = () => {
       active: true, isDemo: isDemo, startTime: Date.now(), notes: song.notes, nextIndex: 0,
       duration: song.duration || 5000
     };
-    setShowSongs(false);
+    closePopups();
   };
 
   const resetScene = () => {
@@ -344,6 +377,14 @@ const App: React.FC = () => {
     }
   };
 
+  const closePopups = () => {
+    setShowThemes(false);
+    setShowMixer(false);
+    setShowSoundSettings(false);
+    setShowSongs(false);
+    setShowSongPicker(null);
+  };
+
   if (!hasStarted) {
     return (
       <div className="flex flex-col items-center justify-center h-screen w-full bg-[#0a1f1c] text-forest-100 relative overflow-hidden" onClick={startExperience}>
@@ -351,15 +392,29 @@ const App: React.FC = () => {
         <div className="z-10 text-center space-y-8 p-12 max-w-lg bg-[#0a1f1c]/80 backdrop-blur-2xl rounded-3xl border border-forest-600 shadow-2xl mx-4">
           <h1 className="text-3xl sm:text-5xl font-extralight tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-forest-300 to-rain-300 uppercase leading-normal">RAINDRUM</h1>
           <p className="text-lg sm:text-xl font-light text-forest-400">Harmonize with nature's rhythm.</p>
-          <div className="p-4 bg-forest-800/50 rounded-lg text-sm text-forest-500 italic animate-pulse cursor-pointer">Tap to Begin</div>
+          <div className="space-y-4">
+            <div className="p-4 bg-forest-800/50 rounded-lg text-sm text-forest-500 italic animate-pulse cursor-pointer border border-forest-600/30">Tap to Begin</div>
+            <div className="flex flex-col items-center gap-2 text-forest-500/80 animate-in fade-in slide-in-from-bottom-2 duration-1000">
+               <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] font-bold">
+                  <Headphones size={14} />
+                  <span>Headphones Recommended</span>
+               </div>
+               <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] font-bold text-yellow-500/60">
+                  <AlertTriangle size={12} />
+                  <span>Check Volume for Best Experience</span>
+               </div>
+            </div>
+          </div>
         </div>
       </div>
     );
   }
 
-  const drumSize = Math.min(dimensions.width * 0.9, dimensions.height * 0.45);
+  const isMobile = dimensions.width < 640;
+  const drumSize = isMobile ? Math.min(dimensions.width * 0.9, dimensions.height * 0.38) : Math.min(dimensions.width * 0.9, dimensions.height * 0.45);
+  
   const drumContainerStyle = {
-    top: '40%', 
+    top: isMobile ? '35%' : '38%',
     height: drumSize, 
     width: drumSize,
     left: '50%',
@@ -377,139 +432,95 @@ const App: React.FC = () => {
       {/* Tutorial Overlay */}
       {showTutorial && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-8 bg-black/60 backdrop-blur-sm animate-in fade-in duration-500">
-           <div className="bg-black/80 border border-white/20 p-8 rounded-[40px] max-w-md w-full shadow-2xl flex flex-col items-center gap-6 text-center animate-in zoom-in-95">
+           <div className="bg-black/80 border border-white/20 p-8 rounded-[40px] max-w-md w-full shadow-2xl flex flex-col items-center gap-6 text-center animate-in zoom-in-95 relative">
+              <button onClick={() => setShowTutorial(false)} className="absolute top-6 right-6 text-white/20 hover:text-white"><X size={20} /></button>
               <div className="w-16 h-16 rounded-full bg-forest-500/20 flex items-center justify-center border border-forest-400/30 text-forest-400">
                  <CloudRain size={32} />
               </div>
-              <div className="space-y-2">
-                <h2 className="text-2xl font-light tracking-widest text-white uppercase">How to Play</h2>
-                <p className="text-white/60 text-sm leading-relaxed">
-                  Welcome to <span className="text-forest-300 font-bold">RainDrum</span>. Compose peaceful melodies in harmony with nature.
-                </p>
-              </div>
+              <h2 className="text-2xl font-light tracking-widest text-white uppercase">How to Play</h2>
               <ul className="text-left w-full space-y-4 text-xs tracking-wide text-white/70">
-                 <li className="flex gap-4 items-start">
-                    <span className="w-6 h-6 rounded-full bg-white/10 flex-shrink-0 flex items-center justify-center text-[10px] font-bold">1</span>
-                    <p>Tap pads to summon raindrops and play notes in the D-Major scale.</p>
-                 </li>
-                 <li className="flex gap-4 items-start">
-                    <span className="w-6 h-6 rounded-full bg-white/10 flex-shrink-0 flex items-center justify-center text-[10px] font-bold">2</span>
-                    <p>Adjust <span className="text-forest-300">Rain Density</span> in the mixer to let nature play for you.</p>
-                 </li>
-                 <li className="flex gap-4 items-start">
-                    <span className="w-6 h-6 rounded-full bg-white/10 flex-shrink-0 flex items-center justify-center text-[10px] font-bold">3</span>
-                    <p>Record your session and save it to your library.</p>
-                 </li>
+                 <li className="flex gap-4 items-start"><span className="w-6 h-6 rounded-full bg-white/10 flex-shrink-0 flex items-center justify-center text-[10px] font-bold">1</span><p>Tap pads to summon raindrops and play notes.</p></li>
+                 <li className="flex gap-4 items-start"><span className="w-6 h-6 rounded-full bg-white/10 flex-shrink-0 flex items-center justify-center text-[10px] font-bold">2</span><p>Adjust <span className="text-forest-300">Rain Density</span> to let nature play.</p></li>
+                 <li className="flex gap-4 items-start"><span className="w-6 h-6 rounded-full bg-white/10 flex-shrink-0 flex items-center justify-center text-[10px] font-bold">3</span><p>Use Practice Mode to learn masterpieces.</p></li>
               </ul>
-              <button 
-                onClick={() => setShowTutorial(false)}
-                className="mt-4 px-10 py-3 rounded-full bg-forest-600 text-white font-bold uppercase text-[10px] tracking-[0.2em] shadow-lg hover:bg-forest-500 transition-colors"
-              >
-                Start Journey
-              </button>
+              <button onClick={() => setShowTutorial(false)} className="mt-4 px-10 py-3 rounded-full bg-forest-600 text-white font-bold uppercase text-[10px] tracking-[0.2em] shadow-lg">Begin</button>
            </div>
         </div>
       )}
 
-      {/* Indicators */}
-      <div className="absolute top-8 left-1/2 transform -translate-x-1/2 z-40 flex flex-col items-center gap-3 w-full px-6">
+      {/* Top Left: Help */}
+      <div className="absolute left-6 top-8 z-40 flex items-center gap-2">
+        <button onClick={() => setShowTutorial(true)} className="p-3 rounded-full bg-black/30 border border-white/10 text-white/40 hover:text-white transition-all"><HelpCircle size={18} /></button>
+      </div>
+
+      {/* Top Center: Recording/Playback Status */}
+      <div className="absolute top-8 left-1/2 transform -translate-x-1/2 z-40 flex flex-col items-center gap-2 w-full max-w-[80%]">
         {isRecording && (
-          <div className="bg-red-900/60 backdrop-blur-md px-5 py-2 rounded-full border border-red-500/50 flex items-center gap-3 shadow-xl">
+          <div className="bg-red-900/60 backdrop-blur-md px-5 py-2 rounded-full border border-red-500/50 flex items-center gap-3 shadow-xl animate-in slide-in-from-top-4">
               <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse shadow-[0_0_10px_#ef4444]"></div>
               <span className="text-red-100 font-mono text-sm tracking-[0.2em]">{formatTime(elapsedTime)}</span>
           </div>
         )}
-
-        {isPracticeMode && (
-          <div className="bg-blue-900/60 backdrop-blur-md px-5 py-2 rounded-full border border-blue-500/50 flex items-center gap-3 shadow-xl">
-              <BookOpen size={16} className="text-blue-300 animate-bounce" />
-              <span className="text-blue-100 font-mono text-sm tracking-[0.2em]">PRACTICE: {practiceStep + 1} / {TWINKLE_MELODY_IDS.length}</span>
-          </div>
-        )}
-        
         {isPlayingBack && (
-          <div className="w-full max-w-md flex flex-col items-center gap-3 bg-black/40 backdrop-blur-2xl p-4 rounded-3xl border border-white/10 shadow-2xl animate-in slide-in-from-top-4 duration-500">
-            <div className="flex items-center justify-between w-full px-2">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-500/20 rounded-full text-blue-400">
-                  <Play size={16} fill="currentColor" className="animate-pulse" />
-                </div>
-                <div>
-                  <div className="text-blue-100 font-medium text-sm tracking-wide truncate max-w-[150px]">{currentSongTitle}</div>
-                  <div className="text-blue-300/50 text-[10px] uppercase font-bold tracking-[0.1em]">{playbackRef.current.isDemo ? 'Auto Playing (Healing Tempo)' : 'Atmospheric Replay'}</div>
-                </div>
-              </div>
-              <button onClick={stopPlayback} className="p-2.5 bg-white/5 hover:bg-white/15 rounded-full text-white/60 transition-colors">
-                <Square size={14} fill="currentColor" />
-              </button>
+          <div className="w-full max-w-xs bg-black/40 backdrop-blur-2xl p-3 rounded-2xl border border-white/10 shadow-2xl animate-in slide-in-from-top-4">
+            <div className="flex items-center justify-between mb-2 px-1">
+              <span className="text-blue-100 text-[10px] uppercase font-bold tracking-widest truncate max-w-[150px]">{currentSongTitle}</span>
+              <button onClick={stopPlayback} className="text-white/40 hover:text-white"><Square size={12} fill="currentColor" /></button>
             </div>
-            <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden border border-white/5 relative">
-              <div className="absolute top-0 left-0 h-full bg-blue-400 shadow-[0_0_15px_#60a5fa] transition-all duration-300 ease-linear rounded-full" style={{ width: `${playbackProgress}%` }}></div>
+            <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden relative">
+              <div className="absolute top-0 left-0 h-full bg-blue-400 shadow-[0_0_10px_#60a5fa] transition-all duration-300" style={{ width: `${playbackProgress}%` }}></div>
             </div>
           </div>
         )}
       </div>
 
-      {/* Clouds */}
-      <div className="absolute top-0 left-0 w-full h-[15%] z-20 pointer-events-none">
-        {NOTES.map((note) => (
-            <div 
-              key={note.id}
-              className="absolute transform -translate-x-1/2 top-4 transition-all duration-300"
-              style={{ left: `${note.cloudLeft}%`, opacity: activeNote === note.id ? 1 : 0.15 }}
-            >
-              <div className={`w-16 h-8 bg-white/40 blur-2xl rounded-full transition-all duration-300 ${activeNote === note.id ? 'scale-150 blur-3xl' : ''}`}></div>
-            </div>
-        ))}
+      {/* Top Right: System */}
+      <div className="absolute right-6 top-8 z-40 flex flex-col gap-3 items-center">
+        <button onClick={toggleMute} className={`p-3 rounded-full border transition-all ${isMuted ? 'bg-red-500/20 border-red-500/50 text-red-400' : 'bg-black/30 border-white/10 text-white/40 hover:text-white'}`}>{isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}</button>
+        <button onClick={resetScene} className="p-3 rounded-full bg-black/30 border border-white/10 text-white/40 hover:text-white transition-all group"><RotateCcw size={18} className="group-hover:rotate-[-90deg] transition-transform duration-500" /></button>
       </div>
 
-      {/* Help - Top Left */}
-      <button 
-        onClick={() => setShowTutorial(true)} 
-        className="absolute left-6 top-8 z-40 p-3 rounded-full bg-black/30 border border-white/10 text-white/40 hover:text-white hover:bg-black/50 transition-all hover:scale-110"
-        title="Tutorial"
-      >
-        <HelpCircle size={18} />
-      </button>
+      {/* Bottom Left: Atmosphere Stack */}
+      <div className="absolute left-6 bottom-12 z-40 flex flex-col gap-4">
+        <button onClick={() => { if (showThemes) closePopups(); else { closePopups(); setShowThemes(true); } }} className={`p-4 rounded-full border transition-all ${showThemes ? 'bg-white/20 text-white border-white' : 'bg-black/40 border-white/10 text-white/40'}`}><Palette size={22} /></button>
+        <button onClick={() => { if (showMixer) closePopups(); else { closePopups(); setShowMixer(true); } }} className={`p-4 rounded-full border transition-all ${showMixer ? 'bg-white/20 text-white border-white' : 'bg-black/40 border-white/10 text-white/40'}`}><Sliders size={22} /></button>
+      </div>
 
-      {/* Reset - Top Right */}
-      <button 
-        onClick={resetScene} 
-        className="absolute right-6 top-8 z-40 p-3 rounded-full bg-black/30 border border-white/10 text-white/40 hover:text-white hover:bg-black/50 transition-all hover:scale-110 group"
-        title="Reset"
-      >
-        <RotateCcw size={18} className="group-hover:rotate-[-90deg] transition-transform duration-500" />
-      </button>
+      {/* Bottom Right: Instrument Stack */}
+      <div className="absolute right-6 bottom-12 z-40 flex flex-col gap-4 items-end">
+        <div className="flex flex-col gap-2 bg-black/20 p-2 rounded-3xl border border-white/5 backdrop-blur-md">
+          <button onClick={() => { if (showSongPicker?.mode === 'play') closePopups(); else { closePopups(); setShowSongPicker({ mode: 'play' }); } }} className={`p-3 rounded-full transition-all ${showSongPicker?.mode === 'play' ? 'bg-yellow-500/20 text-yellow-300' : 'text-white/20 hover:text-white'}`}><Sparkles size={20} /></button>
+          <button onClick={() => { if (showSongPicker?.mode === 'practice') closePopups(); else { closePopups(); setShowSongPicker({ mode: 'practice' }); } }} className={`p-3 rounded-full transition-all ${showSongPicker?.mode === 'practice' || isPracticeMode ? 'bg-blue-500/20 text-blue-300' : 'text-white/20 hover:text-white'}`}><BookOpen size={20} /></button>
+        </div>
+        <button onClick={() => { if (showSoundSettings) closePopups(); else { closePopups(); setShowSoundSettings(true); } }} className={`p-4 rounded-full border transition-all ${showSoundSettings ? 'bg-white/20 text-white border-white' : 'bg-black/40 border-white/10 text-white/40'}`}><Settings size={22} /></button>
+      </div>
+
+      {/* Bottom Center: Studio Dock */}
+      <div className="absolute bottom-12 left-1/2 transform -translate-x-1/2 z-40 flex items-center gap-4 bg-black/40 backdrop-blur-3xl border border-white/10 rounded-[40px] px-6 py-2 shadow-2xl">
+          <button onClick={() => { if (showSongs) closePopups(); else { closePopups(); setShowSongs(true); } }} className={`p-3 rounded-full transition-all ${showSongs ? 'text-forest-300' : 'text-white/30 hover:text-white'}`}><Music size={22} /></button>
+          <button onClick={toggleRecording} className={`relative p-5 rounded-full border transition-all duration-300 ${isRecording ? 'bg-red-500/30 border-red-500/50 scale-110' : 'bg-white/10 border-white/20'}`}>
+              {isRecording ? <Square size={24} fill="currentColor" className="text-red-500" /> : <Circle size={24} fill="currentColor" className="text-red-500" />}
+          </button>
+          <button onClick={() => setIsLooping(!isLooping)} className={`p-3 rounded-full transition-all ${isLooping ? 'text-blue-400' : 'text-white/30 hover:text-white'}`}><Repeat size={22} /></button>
+      </div>
 
       {/* Main Drum */}
-      <div className="absolute z-30" style={{ ...drumContainerStyle }}>
+      <div className="absolute z-30 transition-all duration-700" style={{ ...drumContainerStyle }}>
          <div className="absolute inset-0 rounded-full border border-white/20 backdrop-blur-xl shadow-[0_0_120px_rgba(0,0,0,0.95)]" style={{ backgroundColor: currentTheme.drumColor }}></div>
-         
          {NOTES.map((note) => {
              const isActive = activeNote === note.id;
              const isHit = hitNote === note.id;
-             // Practice Highlight
-             const isPracticeTarget = isPracticeMode && TWINKLE_MELODY_IDS[practiceStep] === note.id;
-             
+             const isPracticeTarget = isPracticeMode && currentPracticeSong?.notes[practiceStep]?.noteId === note.id;
              return (
-               <button 
-                  key={note.id} 
-                  onMouseDown={(e) => { e.stopPropagation(); spawnDrop(note.id); }}
-                  onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); spawnDrop(note.id); }}
-                  className="absolute transform -translate-x-1/2 -translate-y-1/2 flex items-center justify-center focus:outline-none group" 
-                  style={{ left: `${note.left}%`, top: `${note.top}%` }}
-               >
+               <button key={note.id} onMouseDown={(e) => { e.stopPropagation(); spawnDrop(note.id); }} onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); spawnDrop(note.id); }} className="absolute transform -translate-x-1/2 -translate-y-1/2 flex items-center justify-center focus:outline-none group" style={{ left: `${note.left}%`, top: `${note.top}%` }}>
                  <div className={`w-12 h-12 md:w-20 md:h-20 rounded-full border flex items-center justify-center transition-all duration-200 ${
                    isActive ? 'scale-90 bg-white/40 border-white shadow-[0_0_40px_rgba(255,255,255,0.8)]' : 
                    isHit ? 'scale-105 bg-white/20 border-white/60 shadow-[0_0_30px_rgba(255,255,255,0.6)]' :
                    isPracticeTarget ? 'bg-blue-400/20 border-blue-400/60 animate-pulse scale-105 shadow-[0_0_30px_rgba(59,130,246,0.3)]' :
-                   'bg-white/10 border-white/20 group-hover:border-white/40 group-hover:bg-white/15'
+                   'bg-white/10 border-white/20 group-hover:border-white/40'
                  }`}>
-                    <span className={`text-[10px] md:text-xl font-bold pointer-events-none tracking-tight transition-colors ${isActive || isHit ? 'text-white' : isPracticeTarget ? 'text-blue-300' : 'text-white/60'}`}>{note.label}</span>
+                    <span className={`text-[10px] md:text-xl font-bold pointer-events-none tracking-tight ${isActive || isHit ? 'text-white' : isPracticeTarget ? 'text-blue-300' : 'text-white/60'}`}>{note.label}</span>
                  </div>
-                 {isHit && (
-                   <div className="absolute inset-0 rounded-full border-2 border-white/30 animate-ping"></div>
-                 )}
                </button>
              );
           })}
@@ -520,176 +531,99 @@ const App: React.FC = () => {
           <div className="w-full h-[2px] bg-white/20 absolute top-0 blur-[2px]"></div>
       </div>
 
-      {/* Controls */}
-      <div className="absolute bottom-0 left-0 w-full p-6 pb-12 z-40 flex flex-col gap-4">
-        <div className="flex justify-between items-center px-4 max-w-md mx-auto w-full">
-            <div className="flex gap-4">
-                <button onClick={() => { setShowThemes(!showThemes); setShowMixer(false); setShowSoundSettings(false); setShowSongs(false); }} className={`p-4 rounded-full backdrop-blur-xl border transition-all ${showThemes ? 'bg-white/30 border-white text-white shadow-[0_0_15px_rgba(255,255,255,0.3)]' : 'bg-black/40 border-white/20 text-white/70 hover:bg-black/60'}`}><Palette size={22} /></button>
-                <button onClick={() => { setShowMixer(!showMixer); setShowThemes(false); setShowSoundSettings(false); setShowSongs(false); }} className={`p-4 rounded-full backdrop-blur-xl border transition-all ${showMixer ? 'bg-white/30 border-white text-white shadow-[0_0_15px_rgba(255,255,255,0.3)]' : 'bg-black/40 border-white/20 text-white/70 hover:bg-black/60'}`}><Sliders size={22} /></button>
-                <div className="flex bg-black/40 backdrop-blur-xl border border-white/10 rounded-full p-1">
-                    <button onClick={() => playSong(DEMO_SONGS.twinkle, true)} className={`p-3 rounded-full transition-all ${isPlayingBack && playbackRef.current.isDemo ? 'bg-yellow-500/30 text-yellow-300' : 'text-white/40 hover:text-white'}`} title="Auto Play Twinkle"><Sparkles size={18} /></button>
-                    <button onClick={togglePracticeMode} className={`p-3 rounded-full transition-all ${isPracticeMode ? 'bg-blue-500/30 text-blue-300' : 'text-white/40 hover:text-white'}`} title="Practice Twinkle"><BookOpen size={18} /></button>
-                </div>
+      {/* --- Popups with restored Close Buttons --- */}
+
+      {showSongPicker && (
+        <div className="absolute bottom-40 right-6 w-64 bg-black/95 backdrop-blur-3xl border border-white/20 rounded-[30px] p-6 z-50 shadow-2xl animate-in slide-in-from-bottom-4 duration-300">
+            <div className="flex justify-between items-center mb-4">
+               <h3 className="text-white/40 text-[9px] uppercase tracking-widest font-black">{showSongPicker.mode === 'play' ? 'Auto-Play' : 'Practice'}</h3>
+               <button onClick={closePopups} className="text-white/20 hover:text-white transition-colors"><X size={16} /></button>
             </div>
-            
-            <div className="flex gap-4">
-                <button onClick={() => { setShowSoundSettings(!showSoundSettings); setShowThemes(false); setShowMixer(false); setShowSongs(false); }} className={`p-4 rounded-full backdrop-blur-xl border transition-all ${showSoundSettings ? 'bg-white/30 border-white text-white shadow-[0_0_15px_rgba(255,255,255,0.3)]' : 'bg-black/40 border-white/20 text-white/70 hover:bg-black/60'}`}><Settings size={22} /></button>
-                <button onClick={toggleMute} className="p-4 rounded-full backdrop-blur-xl bg-black/40 border border-white/20 text-white/70 hover:bg-black/60 transition-colors">{isMuted ? <VolumeX size={22} /> : <Volume2 size={22} />}</button>
+            <div className="space-y-2">
+                {MASTERPIECES.map(song => (
+                    <button key={song.id} onClick={() => showSongPicker.mode === 'play' ? playSong(song, true) : startPractice(song)} className="w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center justify-between bg-white/5 border border-transparent hover:border-white/10 text-white/80">{song.title}{showSongPicker.mode === 'play' ? <Play size={12} className="text-yellow-400" /> : <BookOpen size={12} className="text-blue-400" />}</button>
+                ))}
             </div>
         </div>
-
-        <div className="flex justify-center items-center gap-8">
-            <button onClick={() => { setShowSongs(!showSongs); setShowThemes(false); setShowMixer(false); setShowSoundSettings(false); }} className="flex flex-col items-center gap-1.5 text-white/70 hover:text-white transition-colors">
-                <div className={`p-5 rounded-full bg-black/50 border border-white/20 backdrop-blur-2xl shadow-xl transition-all ${showSongs ? 'bg-white/20 scale-105' : 'hover:scale-105'}`}><Music size={28} /></div>
-                <span className="text-[11px] uppercase tracking-[0.2em] font-medium">Library</span>
-            </button>
-
-            <button onClick={toggleRecording} className={`flex flex-col items-center gap-1.5 transition-all ${isRecording ? 'text-red-400' : 'text-white/90'}`}>
-                <div className={`p-6 rounded-full border backdrop-blur-2xl shadow-2xl transition-all ${isRecording ? 'bg-red-500/30 border-red-400 scale-110 shadow-red-950/40' : 'bg-white/15 border-white/30 hover:bg-white/25 hover:scale-105'}`}>
-                    {isRecording ? <Square size={32} fill="currentColor" /> : <Circle size={32} fill="currentColor" className="text-red-500" />}
-                </div>
-                <span className="text-[11px] uppercase tracking-[0.2em] font-bold">{isRecording ? 'Stop' : 'Record'}</span>
-            </button>
-            
-            <button onClick={() => setIsLooping(!isLooping)} className={`flex flex-col items-center gap-1.5 transition-all ${isLooping ? 'text-blue-400' : 'text-white/70'}`}>
-                <div className={`p-5 rounded-full backdrop-blur-2xl border transition-all ${isLooping ? 'bg-blue-500/30 border-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.5)]' : 'bg-black/50 border-white/20'}`}><Repeat size={28} /></div>
-                <span className="text-[11px] uppercase tracking-[0.2em] font-medium">{isLooping ? 'Loop ON' : 'Loop OFF'}</span>
-            </button>
-        </div>
-      </div>
-
-      {/* Popups */}
+      )}
+      
       {showSoundSettings && (
-        <div className="absolute bottom-40 left-1/2 transform -translate-x-1/2 w-80 bg-black/90 backdrop-blur-3xl border border-white/20 rounded-[40px] p-8 z-50 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-white/40 text-[10px] uppercase tracking-[0.3em] font-black">Instrument Config</h3>
-              <button onClick={() => setShowSoundSettings(false)} className="text-white/20 hover:text-white transition-colors"><X size={20} /></button>
+        <div className="absolute bottom-40 right-6 w-64 bg-black/95 backdrop-blur-3xl border border-white/20 rounded-[30px] p-6 z-50 shadow-2xl animate-in slide-in-from-bottom-4">
+            <div className="flex justify-between items-center mb-4">
+               <h3 className="text-white/40 text-[9px] uppercase tracking-widest font-black">Instrument</h3>
+               <button onClick={closePopups} className="text-white/20 hover:text-white transition-colors"><X size={16} /></button>
             </div>
-            
-            <div className="space-y-8">
-              <div className="space-y-4">
-                <span className="text-[10px] text-white/30 uppercase tracking-[0.15em] font-bold px-1">Selected Timbre</span>
-                <div className="grid grid-cols-2 gap-3">
-                    {soundOptions.map(type => (
-                        <button key={type} onClick={() => setCurrentSoundType(type)} className={`px-4 py-4 rounded-2xl text-[11px] font-bold tracking-widest transition-all ${currentSoundType === type ? 'bg-white/10 text-white shadow-[0_0_20px_rgba(255,255,255,0.05)] border border-white/20' : 'text-white/40 hover:bg-white/5 border border-transparent'}`}>
-                            {type}
-                        </button>
-                    ))}
-                </div>
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 gap-2">
+                {soundOptions.map(type => (
+                    <button key={type} onClick={() => setCurrentSoundType(type)} className={`px-2 py-3 rounded-xl text-[10px] font-bold tracking-widest transition-all ${currentSoundType === type ? 'bg-white/10 text-white border border-white/20' : 'text-white/30 border border-transparent'}`}>{type}</button>
+                ))}
               </div>
-
-              <div className="pt-6 border-t border-white/5 flex items-center justify-between">
-                <div className="flex flex-col">
-                  <span className="text-[11px] text-white font-medium">Musical Particles</span>
-                  <span className="text-[9px] text-white/30 uppercase tracking-widest mt-1">Impact Visualization</span>
-                </div>
-                <button onClick={() => setVisualizeNotes(!visualizeNotes)} className={`p-3.5 rounded-full border transition-all ${visualizeNotes ? 'bg-blue-500/10 border-blue-400/50 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.2)]' : 'bg-black/40 border-white/10 text-white/20'}`}>
-                  <Sparkles size={20} />
-                </button>
+              <div className="pt-4 border-t border-white/5 flex items-center justify-between">
+                <span className="text-[10px] text-white/40 uppercase font-bold">Particles</span>
+                <button onClick={() => setVisualizeNotes(!visualizeNotes)} className={`p-2 rounded-full border transition-all ${visualizeNotes ? 'bg-blue-500/10 border-blue-400/50 text-blue-400' : 'bg-black/40 border-white/10 text-white/20'}`}><Sparkles size={16} /></button>
               </div>
             </div>
         </div>
       )}
 
       {showThemes && (
-        <div className="absolute bottom-40 left-1/2 transform -translate-x-1/2 w-80 bg-black/90 backdrop-blur-3xl border border-white/20 rounded-[40px] p-8 z-50 shadow-2xl animate-in slide-in-from-bottom-5">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-white/40 text-[10px] uppercase tracking-[0.3em] font-black">Visual Atmosphere</h3>
-              <button onClick={() => setShowThemes(false)} className="text-white/20 hover:text-white transition-colors"><X size={20} /></button>
+        <div className="absolute bottom-40 left-6 w-64 bg-black/95 backdrop-blur-3xl border border-white/20 rounded-[30px] p-6 z-50 shadow-2xl animate-in slide-in-from-bottom-4">
+            <div className="flex justify-between items-center mb-4">
+               <h3 className="text-white/40 text-[9px] uppercase tracking-widest font-black">Visuals</h3>
+               <button onClick={closePopups} className="text-white/20 hover:text-white transition-colors"><X size={16} /></button>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1">
                 {THEMES.map(t => (
-                    <button key={t.id} onClick={() => { setCurrentTheme(t); setShowThemes(false); }} className={`w-full text-left px-5 py-4 rounded-2xl text-xs font-bold tracking-wide transition-all flex items-center justify-between ${currentTheme.id === t.id ? 'bg-white/10 text-white border border-white/10' : 'text-white/40 hover:bg-white/5 border border-transparent'}`}>
-                        {t.name}
-                        {currentTheme.id === t.id && <div className="w-1.5 h-1.5 rounded-full bg-blue-400"></div>}
-                    </button>
+                    <button key={t.id} onClick={() => { setCurrentTheme(t); closePopups(); }} className={`w-full text-left px-4 py-3 rounded-xl text-[11px] font-bold transition-all flex items-center justify-between ${currentTheme.id === t.id ? 'bg-white/10 text-white border border-white/10' : 'text-white/30 border border-transparent'}`}>{t.name}{currentTheme.id === t.id && <div className="w-1 h-1 rounded-full bg-blue-400"></div>}</button>
                 ))}
             </div>
         </div>
       )}
 
       {showMixer && (
-         <div className="absolute bottom-40 left-1/2 transform -translate-x-1/2 w-80 bg-black/90 backdrop-blur-3xl border border-white/20 rounded-[40px] p-8 z-50 shadow-2xl animate-in slide-in-from-bottom-5">
-             <div className="flex justify-between items-center mb-6">
-               <h3 className="text-white/40 text-[10px] uppercase tracking-[0.3em] font-black">Environmental Mixer</h3>
-               <button onClick={() => setShowMixer(false)} className="text-white/20 hover:text-white transition-colors"><X size={20} /></button>
+         <div className="absolute bottom-40 left-6 w-64 bg-black/95 backdrop-blur-3xl border border-white/20 rounded-[30px] p-6 z-50 shadow-2xl animate-in slide-in-from-bottom-4">
+             <div className="flex justify-between items-center mb-4">
+                <h3 className="text-white/40 text-[9px] uppercase tracking-widest font-black">Mixer</h3>
+                <button onClick={closePopups} className="text-white/20 hover:text-white transition-colors"><X size={16} /></button>
              </div>
-             <div className="space-y-6 overflow-y-auto max-h-[40vh] pr-2 custom-scrollbar">
-                 <div className="space-y-4 p-5 bg-white/5 rounded-3xl border border-white/5">
-                    <div className="flex items-center justify-between">
-                       <div className="flex items-center gap-3 text-[11px] font-bold text-white tracking-widest uppercase">
-                          <Droplets size={16} className="text-blue-400" />
-                          <span>Rain Density</span>
-                       </div>
-                       <span className="text-[10px] text-white/30 font-mono">{Math.round(rainDensity * 100)}%</span>
-                    </div>
-                    <input 
-                      type="range" min="0" max="1" step="0.01" 
-                      value={rainDensity} 
-                      onChange={(e) => setRainDensity(parseFloat(e.target.value))} 
-                      className="w-full h-1 appearance-none cursor-pointer bg-white/10 accent-blue-400 rounded-full" 
-                    />
+             <div className="space-y-5 overflow-y-auto max-h-[40vh] pr-1 custom-scrollbar">
+                 <div className="space-y-3 p-3 bg-white/5 rounded-2xl border border-white/5">
+                    <div className="flex items-center justify-between"><div className="flex items-center gap-2 text-[10px] font-bold text-white uppercase"><Droplets size={14} className="text-blue-400" /><span>Rain</span></div><span className="text-[9px] text-white/30">{Math.round(rainDensity * 100)}%</span></div>
+                    <input type="range" min="0" max="1" step="0.01" value={rainDensity} onChange={(e) => setRainDensity(parseFloat(e.target.value))} className="w-full h-1 appearance-none bg-white/10 accent-blue-400 rounded-full" />
                  </div>
-
-                 <div className="grid grid-cols-1 gap-5 pt-2">
-                   {[
-                     { id: 'rain', icon: <CloudRain size={16} />, label: 'Storm', color: 'accent-blue-400' },
-                     { id: 'wind', icon: <Wind size={16} />, label: 'Breeze', color: 'accent-slate-400' },
-                     { id: 'birds', icon: <Bird size={16} />, label: 'Fauna', color: 'accent-yellow-400' },
-                     { id: 'thunder', icon: <Zap size={16} />, label: 'Electric', color: 'accent-purple-400' },
-                     { id: 'ocean', icon: <Waves size={16} />, label: 'Tides', color: 'accent-cyan-400' },
-                     { id: 'fire', icon: <Flame size={16} />, label: 'Hearth', color: 'accent-orange-400' },
-                     { id: 'crickets', icon: <Bug size={16} />, label: 'Insects', color: 'accent-green-400' }
-                   ].map(item => (
-                     <div key={item.id} className="space-y-3 px-1">
-                       <div className="flex items-center justify-between">
-                         <button 
-                            onClick={() => updateAmbience(item.id as AmbienceType, { active: !ambience[item.id as AmbienceType].active })} 
-                            className={`flex items-center gap-4 text-[11px] font-bold uppercase tracking-widest transition-colors ${ambience[item.id as AmbienceType].active ? 'text-white' : 'text-white/20'}`}
-                          >
-                            <span className={ambience[item.id as AmbienceType].active ? 'text-current' : 'text-white/20'}>{item.icon}</span>
-                            <span>{item.label}</span>
-                         </button>
-                         <span className="text-[10px] text-white/20 font-mono">{Math.round(ambience[item.id as AmbienceType].volume * 100)}%</span>
-                       </div>
-                       <input 
-                          type="range" min="0" max="1" step="0.01" 
-                          value={ambience[item.id as AmbienceType].volume} 
-                          onChange={(e) => updateAmbience(item.id as AmbienceType, { volume: parseFloat(e.target.value) })} 
-                          className={`w-full h-0.5 appearance-none cursor-pointer bg-white/5 ${item.color} rounded-full`} 
-                        />
+                 {[
+                   { id: 'rain', icon: <CloudRain size={14} />, label: 'Storm', color: 'accent-blue-400' },
+                   { id: 'wind', icon: <Wind size={14} />, label: 'Breeze', color: 'accent-slate-400' },
+                   { id: 'birds', icon: <Bird size={14} />, label: 'Fauna', color: 'accent-yellow-400' },
+                   { id: 'thunder', icon: <Zap size={14} />, label: 'Electric', color: 'accent-purple-400' }
+                 ].map(item => (
+                   <div key={item.id} className="space-y-2 px-1">
+                     <div className="flex items-center justify-between">
+                       <button onClick={() => updateAmbience(item.id as AmbienceType, { active: !ambience[item.id as AmbienceType].active })} className={`flex items-center gap-3 text-[10px] font-bold uppercase transition-colors ${ambience[item.id as AmbienceType].active ? 'text-white' : 'text-white/20'}`}>{item.icon}<span>{item.label}</span></button>
+                       <span className="text-[9px] text-white/20">{Math.round(ambience[item.id as AmbienceType].volume * 100)}%</span>
                      </div>
-                   ))}
-                 </div>
+                     <input type="range" min="0" max="1" step="0.01" value={ambience[item.id as AmbienceType].volume} onChange={(e) => updateAmbience(item.id as AmbienceType, { volume: parseFloat(e.target.value) })} className={`w-full h-0.5 appearance-none bg-white/5 ${item.color} rounded-full`} />
+                   </div>
+                 ))}
              </div>
          </div>
       )}
 
       {showSongs && (
-          <div className="absolute bottom-40 left-1/2 transform -translate-x-1/2 w-[90%] max-w-md bg-black/95 backdrop-blur-3xl border border-white/20 rounded-[40px] p-8 z-50 shadow-2xl max-h-[60vh] overflow-y-auto animate-in slide-in-from-bottom-5">
-            <div className="flex justify-between items-center mb-8 sticky top-0 bg-black/0 pb-4">
-              <h3 className="text-white/40 text-[10px] uppercase tracking-[0.3em] font-black">Musical Records</h3>
-              <button onClick={() => setShowSongs(false)} className="text-white/20 hover:text-white transition-colors"><X size={20} /></button>
+          <div className="absolute bottom-40 left-1/2 transform -translate-x-1/2 w-[85%] max-w-sm bg-black/95 backdrop-blur-3xl border border-white/20 rounded-[30px] p-6 z-50 shadow-2xl max-h-[50vh] overflow-y-auto animate-in slide-in-from-bottom-4">
+            <div className="flex justify-between items-center mb-6">
+               <h3 className="text-white/40 text-[10px] uppercase tracking-widest font-black">Records</h3>
+               <button onClick={closePopups} className="text-white/20 hover:text-white transition-colors"><X size={16} /></button>
             </div>
             {savedSongs.length === 0 ? (
-              <div className="flex flex-col items-center gap-4 py-12">
-                <Music size={40} className="text-white/5" />
-                <p className="text-white/20 text-xs text-center italic font-light tracking-wide">No recordings yet in this sanctuary...</p>
-              </div>
+              <p className="text-white/20 text-[10px] text-center italic py-8">No recordings yet...</p>
             ) : (
-                <div className="space-y-4">
+                <div className="space-y-3">
                 {savedSongs.map(song => (
-                    <div key={song.id} className="group flex items-center justify-between p-5 bg-white/5 rounded-3xl border border-transparent hover:border-white/10 hover:bg-white/10 transition-all duration-300">
-                        <div className="overflow-hidden flex flex-col gap-1">
-                            <div className="text-white font-bold text-sm truncate tracking-tight">{song.title}</div>
-                            <div className="text-white/30 text-[9px] uppercase font-bold tracking-[0.1em]">{song.date} • {formatTime(song.duration)}</div>
-                        </div>
-                        <button 
-                          onClick={() => playSong(song)} 
-                          className="p-4 bg-white/10 hover:bg-blue-500 text-white rounded-2xl transition-all hover:scale-105 active:scale-95 shadow-xl"
-                        >
-                          <Play size={18} fill="currentColor" />
-                        </button>
+                    <div key={song.id} className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-transparent hover:border-white/10 transition-all">
+                        <div className="overflow-hidden"><div className="text-white font-bold text-xs truncate">{song.title}</div><div className="text-white/30 text-[8px] uppercase">{song.date}</div></div>
+                        <button onClick={() => playSong(song)} className="p-3 bg-white/10 hover:bg-blue-500 text-white rounded-xl"><Play size={14} fill="currentColor" /></button>
                     </div>
                 ))}
                 </div>
