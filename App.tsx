@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Play, Square, Circle, Music, Volume2, VolumeX, Sliders, CloudRain, Wind, Bird, Zap, Repeat, Palette, Clock, X, Settings, RotateCcw, Sparkles, HelpCircle, Droplets, Flame, Waves, Bug, BookOpen, Headphones, AlertTriangle, Moon } from 'lucide-react';
+import { Play, Square, Circle, Music, Volume2, VolumeX, Sliders, CloudRain, Wind, Bird, Zap, Repeat, Palette, Clock, X, Settings, RotateCcw, Sparkles, HelpCircle, Droplets, Flame, Waves, Bug, BookOpen, Headphones, AlertTriangle, Moon, FastForward } from 'lucide-react';
 import { Note, RainDrop, Ripple, Song, RecordedNote, AmbienceType, AmbienceConfig, Theme, SoundType, NoteParticle } from './types';
 import { NOTES, THEMES, GRAVITY_SPEED, PAD_Y_PERCENT, MASTERPIECES } from './constants';
 import { audioEngine } from './services/audioEngine';
@@ -34,6 +33,15 @@ const App: React.FC = () => {
   const [activeNote, setActiveNote] = useState<string | null>(null);
   const [hitNote, setHitNote] = useState<string | null>(null);
 
+  // Audio Control
+  const [masterVolume, setMasterVolume] = useState(0.7);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
+  const playbackSpeedRef = useRef(1.0);
+
+  useEffect(() => {
+    playbackSpeedRef.current = playbackSpeed;
+  }, [playbackSpeed]);
+
   // Timer state
   const [timerSeconds, setTimerSeconds] = useState<number | null>(null);
   const timerIntervalRef = useRef<number | null>(null);
@@ -51,6 +59,7 @@ const App: React.FC = () => {
       ocean: { active: false, volume: 0.4 },
       fire: { active: false, volume: 0.3 },
       crickets: { active: false, volume: 0.2 },
+      frogs: { active: false, volume: 0.25 },
     };
   });
 
@@ -92,8 +101,8 @@ const App: React.FC = () => {
   const [currentPracticeSong, setCurrentPracticeSong] = useState<Song | null>(null);
   
   const requestRef = useRef<number>(null);
-  const playbackRef = useRef<{ active: boolean, isDemo: boolean, startTime: number, notes: RecordedNote[], nextIndex: number, duration: number }>({
-    active: false, isDemo: false, startTime: 0, notes: [], nextIndex: 0, duration: 0
+  const playbackRef = useRef<{ active: boolean, isDemo: boolean, startTime: number, notes: RecordedNote[], nextIndex: number, duration: number, accumulatedTime: number, lastCheck: number }>({
+    active: false, isDemo: false, startTime: 0, notes: [], nextIndex: 0, duration: 0, accumulatedTime: 0, lastCheck: 0
   });
 
   useEffect(() => {
@@ -170,6 +179,7 @@ const App: React.FC = () => {
     (Object.keys(ambience) as AmbienceType[]).forEach((type) => {
       audioEngine.setAmbience(type, ambience[type].active, ambience[type].volume);
     });
+    audioEngine.setMasterVolume(masterVolume);
     setHasStarted(true);
   };
 
@@ -180,9 +190,18 @@ const App: React.FC = () => {
   const toggleMute = () => {
     const nextMuted = !isMuted;
     setIsMuted(nextMuted);
-    (Object.keys(ambience) as AmbienceType[]).forEach(t => {
-      audioEngine.setAmbience(t, nextMuted ? false : ambience[t].active, nextMuted ? 0 : ambience[t].volume);
-    });
+    if (nextMuted) {
+      audioEngine.setMasterVolume(0);
+    } else {
+      audioEngine.setMasterVolume(masterVolume);
+    }
+  };
+
+  const updateMasterVolume = (val: number) => {
+    setMasterVolume(val);
+    if (!isMuted) {
+      audioEngine.setMasterVolume(val);
+    }
   };
 
   const updateAmbience = (type: AmbienceType, changes: Partial<AmbienceConfig>) => {
@@ -316,25 +335,27 @@ const App: React.FC = () => {
 
     if (playbackRef.current.active) {
       const now = Date.now();
-      let elapsed = now - playbackRef.current.startTime;
-      const { notes, duration } = playbackRef.current;
+      const delta = (now - playbackRef.current.lastCheck) * playbackSpeedRef.current;
+      playbackRef.current.accumulatedTime += delta;
+      playbackRef.current.lastCheck = now;
+      
+      const { notes, duration, accumulatedTime } = playbackRef.current;
 
-      if (isLooping && duration > 0 && elapsed >= duration) {
-        playbackRef.current.startTime = now;
+      if (isLooping && duration > 0 && accumulatedTime >= duration) {
+        playbackRef.current.accumulatedTime = 0;
         playbackRef.current.nextIndex = 0;
-        elapsed = 0;
       }
 
-      setPlaybackProgress(duration > 0 ? Math.min((elapsed / duration) * 100, 100) : 0);
+      setPlaybackProgress(duration > 0 ? Math.min((accumulatedTime / duration) * 100, 100) : 0);
 
       let idx = playbackRef.current.nextIndex;
-      while (idx < notes.length && notes[idx].timestamp <= elapsed) {
+      while (idx < notes.length && notes[idx].timestamp <= accumulatedTime) {
         spawnDrop(notes[idx].noteId, false);
         idx++;
       }
       playbackRef.current.nextIndex = idx;
 
-      if (!isLooping && idx >= notes.length && drops.length === 0 && elapsed >= duration + 1000) {
+      if (!isLooping && idx >= notes.length && drops.length === 0 && accumulatedTime >= duration + 1000) {
         stopPlayback();
       }
     }
@@ -380,23 +401,39 @@ const App: React.FC = () => {
     localStorage.setItem('raindrum_songs', JSON.stringify(updated));
   };
 
+  const closePopups = () => {
+    setShowThemes(false);
+    setShowMixer(false);
+    setShowSoundSettings(false);
+    setShowSongs(false);
+    setShowSongPicker(null);
+    setShowTimerMenu(false);
+  };
+
+  const playSong = (song: Song, isDemo: boolean = false) => {
+    setIsPlayingBack(true);
+    setCurrentSongTitle(song.title);
+    setPlaybackProgress(0);
+    const now = Date.now();
+    playbackRef.current = {
+      active: true,
+      isDemo,
+      startTime: now,
+      lastCheck: now,
+      accumulatedTime: 0,
+      notes: song.notes,
+      nextIndex: 0,
+      duration: song.duration
+    };
+    closePopups();
+    if (isPracticeMode) setIsPracticeMode(false);
+  };
+
   const stopPlayback = () => {
     setIsPlayingBack(false);
     setCurrentSongTitle("");
     setPlaybackProgress(0);
     playbackRef.current.active = false;
-  };
-
-  const playSong = async (song: Song, isDemo = false) => {
-    await handleInteraction();
-    if (isPracticeMode) setIsPracticeMode(false);
-    setIsPlayingBack(true);
-    setCurrentSongTitle(song.title);
-    playbackRef.current = {
-      active: true, isDemo: isDemo, startTime: Date.now(), notes: song.notes, nextIndex: 0,
-      duration: song.duration || 5000
-    };
-    closePopups();
   };
 
   const resetScene = () => {
@@ -414,19 +451,10 @@ const App: React.FC = () => {
     }
   };
 
-  const closePopups = () => {
-    setShowThemes(false);
-    setShowMixer(false);
-    setShowSoundSettings(false);
-    setShowSongs(false);
-    setShowSongPicker(null);
-    setShowTimerMenu(false);
-  };
-
   if (!hasStarted) {
     return (
       <div className="flex flex-col items-center justify-center h-screen w-full bg-[#0a1f1c] text-forest-100 relative overflow-hidden" onClick={startExperience}>
-        <div className="absolute inset-0 z-0 opacity-40 bg-[url('https://images.unsplash.com/photo-1511497584788-876760111969?ixlib=rb-4.0.3&auto=format&fit=crop&w=2000&q=80')] bg-cover bg-center"></div>
+        <div className="absolute inset-0 z-0 opacity-40 bg-[url('https://images.unsplash.com/photo-1511497584788-876760111969?auto=format&fit=crop&w=2000&q=80')] bg-cover bg-center"></div>
         <div className="z-10 text-center space-y-8 p-12 max-w-lg bg-[#0a1f1c]/80 backdrop-blur-2xl rounded-3xl border border-forest-600 shadow-2xl mx-4">
           <h1 className="text-3xl sm:text-5xl font-extralight tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-forest-300 to-rain-300 uppercase leading-normal">RAINDRUM</h1>
           <p className="text-lg sm:text-xl font-light text-forest-400">Harmonize with nature's rhythm.</p>
@@ -453,7 +481,7 @@ const App: React.FC = () => {
     transform: 'translate(-50%, -50%)'
   };
 
-  const soundOptions: SoundType[] = ['Crystal', 'Metallic', 'Wood', 'Ether'];
+  const soundOptions: SoundType[] = ['Crystal', 'Metallic', 'Wood', 'Ether', 'Celestial', 'Deep', 'Bamboo', 'MusicBox', 'Kalimba', 'Flute'];
 
   return (
     <div className={`relative h-screen w-full bg-gradient-to-b ${currentTheme.bgGradient} select-none transition-all duration-1000 overflow-hidden`} onMouseDown={handleInteraction} onTouchStart={handleInteraction}>
@@ -485,19 +513,19 @@ const App: React.FC = () => {
         <button onClick={() => setShowTutorial(true)} className="p-3 rounded-full bg-black/30 border border-white/10 text-white/40 hover:text-white transition-all"><HelpCircle size={18} /></button>
       </div>
 
-      {/* Top Center: Recording/Playback Status */}
-      <div className="absolute top-8 left-1/2 transform -translate-x-1/2 z-40 flex flex-col items-center gap-2 w-full max-w-[80%]">
+      {/* Center Top: Recording/Playback Status */}
+      <div className={`absolute top-8 left-1/2 transform -translate-x-1/2 z-[45] flex flex-col items-center gap-2 w-full max-w-[45%] sm:max-w-[35%] pointer-events-none`}>
         {isRecording && (
-          <div className="bg-red-900/60 backdrop-blur-md px-5 py-2 rounded-full border border-red-500/50 flex items-center gap-3 shadow-xl animate-in slide-in-from-top-4">
-              <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse shadow-[0_0_10px_#ef4444]"></div>
-              <span className="text-red-100 font-mono text-sm tracking-[0.2em]">{formatTime(elapsedTime)}</span>
+          <div className="bg-red-900/60 backdrop-blur-md px-4 py-1.5 rounded-full border border-red-500/50 flex items-center gap-2 shadow-xl animate-in slide-in-from-top-4 pointer-events-auto">
+              <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse shadow-[0_0_8px_#ef4444]"></div>
+              <span className="text-red-100 font-mono text-xs tracking-widest">{formatTime(elapsedTime)}</span>
           </div>
         )}
         {isPlayingBack && (
-          <div className="w-full max-w-xs bg-black/40 backdrop-blur-2xl p-3 rounded-2xl border border-white/10 shadow-2xl animate-in slide-in-from-top-4">
-            <div className="flex items-center justify-between mb-2 px-1">
-              <span className="text-blue-100 text-[10px] uppercase font-bold tracking-widest truncate max-w-[150px]">{currentSongTitle}</span>
-              <button onClick={stopPlayback} className="text-white/40 hover:text-white"><Square size={12} fill="currentColor" /></button>
+          <div className="w-full bg-black/60 backdrop-blur-3xl p-2.5 rounded-xl border border-white/20 shadow-2xl animate-in slide-in-from-top-4 pointer-events-auto ring-1 ring-white/10">
+            <div className="flex items-center justify-between mb-1.5 px-0.5 gap-2">
+              <span className="text-blue-100 text-[9px] uppercase font-bold tracking-tight truncate">{currentSongTitle}</span>
+              <button onClick={stopPlayback} className="text-white/60 hover:text-white p-1.5 bg-white/10 rounded-lg transition-colors"><Square size={12} fill="currentColor" /></button>
             </div>
             <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden relative">
               <div className="absolute top-0 left-0 h-full bg-blue-400 shadow-[0_0_10px_#60a5fa] transition-all duration-300" style={{ width: `${playbackProgress}%` }}></div>
@@ -535,7 +563,7 @@ const App: React.FC = () => {
         <button onClick={() => { if (showSoundSettings) closePopups(); else { closePopups(); setShowSoundSettings(true); } }} className={`p-4 rounded-full border transition-all ${showSoundSettings ? 'bg-white/20 text-white border-white' : 'bg-black/40 border-white/10 text-white/40'}`}><Settings size={22} /></button>
       </div>
 
-      {/* Bottom Center: Studio Dock (Optimized for Android) */}
+      {/* Bottom Center: Studio Dock */}
       <div className="absolute bottom-10 left-1/2 transform -translate-x-1/2 z-40 flex items-center gap-3 bg-black/40 backdrop-blur-3xl border border-white/10 rounded-[40px] px-4 py-1.5 shadow-2xl scale-95 sm:scale-100">
           <button onClick={() => { if (showSongs) closePopups(); else { closePopups(); setShowSongs(true); } }} className={`p-2.5 rounded-full transition-all ${showSongs ? 'text-forest-300' : 'text-white/30 hover:text-white'}`}><Music size={20} /></button>
           <button onClick={toggleRecording} className={`relative p-4 rounded-full border transition-all duration-300 ${isRecording ? 'bg-red-500/30 border-red-500/50 scale-105' : 'bg-white/5 border-white/10'}`}>
@@ -553,13 +581,13 @@ const App: React.FC = () => {
              const isPracticeTarget = isPracticeMode && !isStepTransitioning && currentPracticeSong?.notes[practiceStep]?.noteId === note.id;
              return (
                <button key={note.id} onMouseDown={(e) => { e.stopPropagation(); spawnDrop(note.id); }} onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); spawnDrop(note.id); }} className="absolute transform -translate-x-1/2 -translate-y-1/2 flex items-center justify-center focus:outline-none group" style={{ left: `${note.left}%`, top: `${note.top}%` }}>
-                 <div className={`w-12 h-12 md:w-20 md:h-20 rounded-full border flex items-center justify-center transition-all duration-200 ${
+                 <div className={`w-14 h-14 md:w-22 md:h-22 rounded-full border flex items-center justify-center transition-all duration-200 ${
                    isActive ? 'scale-90 bg-white/40 border-white shadow-[0_0_40px_rgba(255,255,255,0.8)]' : 
                    isHit ? 'scale-105 bg-white/20 border-white/60 shadow-[0_0_30px_rgba(255,255,255,0.6)]' :
                    isPracticeTarget ? 'bg-blue-400/20 border-blue-400/60 animate-pulse scale-110 shadow-[0_0_40px_rgba(59,130,246,0.4)]' :
                    'bg-white/10 border-white/20 group-hover:border-white/40'
                  }`}>
-                    <span className={`text-[10px] md:text-xl font-bold pointer-events-none tracking-tight ${isActive || isHit ? 'text-white' : isPracticeTarget ? 'text-blue-300 scale-110' : 'text-white/60'}`}>{note.label}</span>
+                    <span className={`text-[10px] md:text-sm font-bold pointer-events-none tracking-tight leading-tight whitespace-pre text-center ${isActive || isHit ? 'text-white' : isPracticeTarget ? 'text-blue-300 scale-110' : 'text-white/60'}`}>{note.label}</span>
                  </div>
                </button>
              );
@@ -598,10 +626,19 @@ const App: React.FC = () => {
                <h3 className="text-white/40 text-[9px] uppercase tracking-widest font-black">{showSongPicker.mode === 'play' ? 'Auto-Play' : 'Practice'}</h3>
                <button onClick={closePopups} className="text-white/20 hover:text-white transition-colors"><X size={16} /></button>
             </div>
-            <div className="space-y-2">
-                {MASTERPIECES.map(song => (
-                    <button key={song.id} onClick={() => showSongPicker.mode === 'play' ? playSong(song, true) : startPractice(song)} className="w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center justify-between bg-white/5 border border-transparent hover:border-white/10 text-white/80">{song.title}{showSongPicker.mode === 'play' ? <Play size={12} className="text-yellow-400" /> : <BookOpen size={12} className="text-blue-400" />}</button>
-                ))}
+            <div className="space-y-4">
+                <div className="space-y-2 p-3 bg-white/5 rounded-2xl border border-white/5">
+                   <div className="flex items-center justify-between">
+                     <div className="flex items-center gap-2 text-[10px] font-bold text-white uppercase"><FastForward size={14} className="text-yellow-400" /><span>Tempo</span></div>
+                     <span className="text-[9px] text-white/30">{(playbackSpeed * 100).toFixed(0)}%</span>
+                   </div>
+                   <input type="range" min="0.5" max="2.0" step="0.1" value={playbackSpeed} onChange={(e) => setPlaybackSpeed(parseFloat(e.target.value))} className="w-full h-1 appearance-none bg-white/10 accent-yellow-400 rounded-full" />
+                </div>
+                <div className="space-y-2">
+                    {MASTERPIECES.map(song => (
+                        <button key={song.id} onClick={() => showSongPicker.mode === 'play' ? playSong(song, true) : startPractice(song)} className="w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center justify-between bg-white/5 border border-transparent hover:border-white/10 text-white/80">{song.title}{showSongPicker.mode === 'play' ? <Play size={12} className="text-yellow-400" /> : <BookOpen size={12} className="text-blue-400" />}</button>
+                    ))}
+                </div>
             </div>
         </div>
       )}
@@ -646,7 +683,16 @@ const App: React.FC = () => {
                 <h3 className="text-white/40 text-[9px] uppercase tracking-widest font-black">Mixer</h3>
                 <button onClick={closePopups} className="text-white/20 hover:text-white transition-colors"><X size={16} /></button>
              </div>
-             <div className="space-y-5 overflow-y-auto max-h-[40vh] pr-1 custom-scrollbar">
+             <div className="space-y-4 overflow-y-auto max-h-[50vh] pr-1 custom-scrollbar">
+                 {/* Master Volume Slider */}
+                 <div className="space-y-3 p-3 bg-white/10 rounded-2xl border border-white/20 shadow-lg">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-[10px] font-bold text-white uppercase"><Volume2 size={14} className="text-forest-300" /><span>Master Volume</span></div>
+                      <span className="text-[9px] text-white/30">{Math.round(masterVolume * 100)}%</span>
+                    </div>
+                    <input type="range" min="0" max="1" step="0.01" value={masterVolume} onChange={(e) => updateMasterVolume(parseFloat(e.target.value))} className="w-full h-1.5 appearance-none bg-white/10 accent-forest-300 rounded-full cursor-pointer" />
+                 </div>
+
                  <div className="space-y-3 p-3 bg-white/5 rounded-2xl border border-white/5">
                     <div className="flex items-center justify-between"><div className="flex items-center gap-2 text-[10px] font-bold text-white uppercase"><Droplets size={14} className="text-blue-400" /><span>Rain</span></div><span className="text-[9px] text-white/30">{Math.round(rainDensity * 100)}%</span></div>
                     <input type="range" min="0" max="1" step="0.01" value={rainDensity} onChange={(e) => setRainDensity(parseFloat(e.target.value))} className="w-full h-1 appearance-none bg-white/10 accent-blue-400 rounded-full" />
@@ -655,6 +701,7 @@ const App: React.FC = () => {
                    { id: 'rain', icon: <CloudRain size={14} />, label: 'Storm', color: 'accent-blue-400' },
                    { id: 'wind', icon: <Wind size={14} />, label: 'Breeze', color: 'accent-slate-400' },
                    { id: 'birds', icon: <Bird size={14} />, label: 'Fauna', color: 'accent-yellow-400' },
+                   { id: 'crickets', icon: <Bug size={14} />, label: '鈴虫 (Insects)', color: 'accent-indigo-400' },
                    { id: 'thunder', icon: <Zap size={14} />, label: 'Electric', color: 'accent-purple-400' }
                  ].map(item => (
                    <div key={item.id} className="space-y-2 px-1">

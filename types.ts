@@ -9,7 +9,7 @@ export interface Note {
   cloudLeft: number; // Percentage 0-100 relative to screen width
 }
 
-export type SoundType = 'Crystal' | 'Metallic' | 'Wood' | 'Ether';
+export type SoundType = 'Crystal' | 'Metallic' | 'Wood' | 'Ether' | 'Celestial' | 'Deep' | 'Bamboo' | 'MusicBox' | 'Kalimba' | 'Flute';
 
 export interface RainDrop {
   id: string;
@@ -53,7 +53,7 @@ export interface Song {
   duration: number;
 }
 
-export type AmbienceType = 'rain' | 'wind' | 'birds' | 'thunder' | 'ocean' | 'fire' | 'crickets';
+export type AmbienceType = 'rain' | 'wind' | 'birds' | 'thunder' | 'ocean' | 'fire' | 'crickets' | 'frogs';
 
 export interface AmbienceConfig {
   active: boolean;

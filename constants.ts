@@ -1,42 +1,46 @@
 import { Note, Theme, Song } from './types';
 
-// 指定された11音のタングドラムレイアウト
-const degToRad = (deg: number) => deg * (Math.PI / 180);
-const ringRadius = 38; 
-const getPos = (index: number) => {
-    const angle = 90 + (index * 36); 
+// Helper to define positions clockwise starting from bottom (6 o'clock)
+const getRingPos = (index: number, total: number) => {
+    // 90 degrees is the bottom in this specific coordinate calculation
+    const angle = 90 + (index * (360 / total));
+    const rad = angle * (Math.PI / 180);
+    const radius = 38;
     return {
-        left: 50 + ringRadius * Math.cos(degToRad(angle)),
-        top: 50 + ringRadius * Math.sin(degToRad(angle))
+        left: 50 + radius * Math.cos(rad),
+        top: 50 + radius * Math.sin(rad)
     };
 };
 
+// Fixed Note Placement:
+// A3(5) is the lowest note -> Center
+// C#4(7) is at the bottom ring position
+// Others follow clockwise: E4(2), G4(4), B4(6), D5(1), B3(6), C#5(7), A4(5), F#4(3), D4(1)
 const rawNotes = [
-    { id: 'n_c#4', name: 'C#4', freq: 277.18, label: 'C#4', cloud: 50, pos: { left: 50, top: 50 } },
-    { id: 'n_a3',   name: 'A3',   freq: 220.00, label: 'A3',   cloud: 50, pos: getPos(0) },
-    { id: 'n_e4',   name: 'E4',   freq: 329.63, label: 'E4',   cloud: 25, pos: getPos(1) },
-    { id: 'n_g4',   name: 'G4',   freq: 392.00, label: 'G4',   cloud: 10, pos: getPos(2) },
-    { id: 'n_b4',   name: 'B4',   freq: 493.88, label: 'B4',   cloud: 15, pos: getPos(3) },
-    { id: 'n_d5',   name: 'D5',   freq: 587.33, label: 'D5',   cloud: 30, pos: getPos(4) },
-    { id: 'n_b3',   name: 'B3',   freq: 246.94, label: 'B3',   cloud: 50, pos: getPos(5) },
-    { id: 'n_c#5',  name: 'C#5',  freq: 554.37, label: 'C#5',  cloud: 70, pos: getPos(6) },
-    { id: 'n_a4',   name: 'A4',   freq: 440.00, label: 'A4',   cloud: 85, pos: getPos(7) },
-    { id: 'n_f#4',  name: 'F#4',  freq: 369.99, label: 'F#4',  cloud: 90, pos: getPos(8) },
-    { id: 'n_d4',   name: 'D4',   freq: 293.66, label: 'D4',   cloud: 75, pos: getPos(9) },
+    { id: 'n_c#4',  name: 'C#4',  freq: 277.18, label: '7', cloud: 20, pos: getRingPos(0, 10) }, // Bottom Ring
+    { id: 'n_e4',   name: 'E4',   freq: 329.63, label: '2', cloud: 15, pos: getRingPos(1, 10) },
+    { id: 'n_g4',   name: 'G4',   freq: 392.00, label: '4', cloud: 50, pos: getRingPos(2, 10) },
+    { id: 'n_b4',   name: 'B4',   freq: 493.88, label: '6', cloud: 85, pos: getRingPos(3, 10) },
+    { id: 'n_d5',   name: 'D5',   freq: 587.33, label: '1', cloud: 75, pos: getRingPos(4, 10) },
+    { id: 'n_b3',   name: 'B3',   freq: 246.94, label: '6', cloud: 35, pos: getRingPos(5, 10) },
+    { id: 'n_c#5',  name: 'C#5',  freq: 554.37, label: '7', cloud: 90, pos: getRingPos(6, 10) },
+    { id: 'n_a4',   name: 'A4',   freq: 440.00, label: '5', cloud: 70, pos: getRingPos(7, 10) },
+    { id: 'n_f#4',  name: 'F#4',  freq: 369.99, label: '3', cloud: 30, pos: getRingPos(8, 10) },
+    { id: 'n_d4',   name: 'D4',   freq: 293.66, label: '1', cloud: 50, pos: getRingPos(9, 10) },
+    { id: 'n_a3',   name: 'A3',   freq: 220.00, label: '5', cloud: 50, pos: { left: 50, top: 50 } }, // Center
 ];
 
 export const NOTES: Note[] = rawNotes.map(n => ({
     id: n.id,
     name: n.name,
     frequency: n.freq,
-    label: n.label,
+    label: `${n.label}\n${n.name}`, 
     color: '#a5b4fc', 
     left: n.pos.left,
     top: n.pos.top,
     cloudLeft: n.cloud
 }));
 
-// 曲生成ヘルパー
 const createSong = (id: string, title: string, melody: string[], tempo: number = 900): Song => {
   return {
     id,
@@ -51,6 +55,15 @@ const createSong = (id: string, title: string, melody: string[], tempo: number =
 };
 
 export const MASTERPIECES: Song[] = [
+  createSong('jesu', '主よ、人の望みの喜びよ', [
+    'n_d4', 'n_e4', 'n_f#4', 'n_a4', 'n_g4', 'n_g4', 'n_b4', 'n_a4', 'n_a4', 'n_d5', 'n_c#5', 'n_d5', 
+    'n_a4', 'n_f#4', 'n_d4', 'n_e4', 'n_f#4', 'n_g4', 'n_a4', 'n_b4', 'n_a4', 'n_g4', 'n_f#4', 'n_e4', 
+    'n_f#4', 'n_d4', 'n_c#4', 'n_d4', 'n_e4', 'n_a3', 'n_c#4', 'n_e4', 'n_g4', 'n_f#4', 'n_e4', 'n_f#4', 
+    'n_d4', 'n_e4', 'n_f#4', 'n_a4', 'n_g4', 'n_g4', 'n_b4', 'n_a4', 'n_a4', 'n_d5', 'n_c#5', 'n_d5', 
+    'n_a4', 'n_f#4', 'n_d4', 'n_e4', 'n_f#4', 'n_b3', 'n_a4', 'n_g4', 'n_f#4', 'n_e4', 'n_d4', 'n_a3', 
+    'n_d4', 'n_c#4', 'n_d4', 'n_f#4', 'n_a4', 'n_d5', 'n_a4', 'n_f#4', 'n_d4', 'n_f#4', 'n_a4', 'n_d5'
+  ], 750),
+
   createSong('twinkle', 'きらきら星', [
     'n_d4', 'n_d4', 'n_a4', 'n_a4', 'n_b4', 'n_b4', 'n_a4',
     'n_g4', 'n_g4', 'n_f#4', 'n_f#4', 'n_e4', 'n_e4', 'n_d4',
@@ -68,13 +81,6 @@ export const MASTERPIECES: Song[] = [
     'n_f#4', 'n_e4', 'n_d4'
   ], 1100),
 
-  createSong('london_bridge', 'ロンドン橋落ちた', [
-    'n_a4', 'n_b4', 'n_a4', 'n_g4', 'n_f#4', 'n_g4', 'n_a4',
-    'n_e4', 'n_f#4', 'n_g4', 'n_f#4', 'n_g4', 'n_a4',
-    'n_a4', 'n_b4', 'n_a4', 'n_g4', 'n_f#4', 'n_g4', 'n_a4',
-    'n_e4', 'n_a4', 'n_f#4', 'n_d4'
-  ], 1200),
-
   createSong('mary', 'メリーさんのひつじ', [
     'n_f#4', 'n_e4', 'n_d4', 'n_e4', 'n_f#4', 'n_f#4', 'n_f#4',
     'n_e4', 'n_e4', 'n_e4', 'n_f#4', 'n_a4', 'n_a4',
@@ -89,10 +95,6 @@ export const MASTERPIECES: Song[] = [
     'n_e4', 'n_g4', 'n_c#5', 'n_b4', 'n_a4', 'n_c#5', 'n_d5'
   ], 1100)
 ];
-
-export const DEMO_SONGS = {
-    twinkle: MASTERPIECES[0]
-};
 
 export const THEMES: Theme[] = [
   {
@@ -124,7 +126,7 @@ export const THEMES: Theme[] = [
   },
   {
     id: 'night_sea',
-    name: '夜の海 (Night Sea)',
+    name: '夜의 海 (Night Sea)',
     bgGradient: 'from-[#020617] via-[#0c4a6e] to-[#020617]',
     bgImage: 'https://images.unsplash.com/photo-1505118380757-91f5f5632de0?auto=format&fit=crop&w=2000&q=80',
     drumColor: 'rgba(12, 74, 110, 0.85)',

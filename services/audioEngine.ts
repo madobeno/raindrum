@@ -1,4 +1,3 @@
-
 import { AmbienceType, SoundType } from "../types";
 
 class AudioEngine {
@@ -25,6 +24,9 @@ class AudioEngine {
 
   private cricketsGain: GainNode | null = null;
   private isCricketsActive: boolean = false;
+  
+  private frogsGain: GainNode | null = null;
+  private isFrogsActive: boolean = false;
 
   public init() {
     if (this.context) return;
@@ -54,6 +56,11 @@ class AudioEngine {
       return this.context.resume();
     }
     return Promise.resolve();
+  }
+
+  public setMasterVolume(value: number) {
+    if (!this.context || !this.masterGain) return;
+    this.masterGain.gain.setTargetAtTime(value, this.context.currentTime, 0.1);
   }
 
   public fadeOutMaster(duration: number, onComplete: () => void) {
@@ -149,6 +156,10 @@ class AudioEngine {
     this.cricketsGain = this.context.createGain();
     this.cricketsGain.gain.value = 0;
     this.cricketsGain.connect(this.masterGain);
+
+    this.frogsGain = this.context.createGain();
+    this.frogsGain.gain.value = 0;
+    this.frogsGain.connect(this.masterGain);
   }
 
   public setAmbience(type: AmbienceType, active: boolean, volume: number) {
@@ -223,7 +234,7 @@ class AudioEngine {
           filter.frequency.value = 400;
           const lfo = this.context.createOscillator();
           lfo.type = 'sine';
-          lfo.frequency.value = 0.12; // Wave frequency
+          lfo.frequency.value = 0.12; 
           const lfoGain = this.context.createGain();
           lfoGain.gain.value = 0.4;
           lfo.connect(lfoGain);
@@ -256,34 +267,84 @@ class AudioEngine {
           this.playCricketChirp();
         } else if (!active) this.isCricketsActive = false;
         break;
+      case 'frogs':
+        if (this.frogsGain) this.frogsGain.gain.setTargetAtTime(targetVal, this.context.currentTime, 0.5);
+        if (active && !this.isFrogsActive) {
+          this.isFrogsActive = true;
+          this.playFrogChirp();
+        } else if (!active) this.isFrogsActive = false;
+        break;
     }
+  }
+
+  private playFrogChirp() {
+    if (!this.context || !this.frogsGain || !this.isFrogsActive) return;
+    const t = this.context.currentTime;
+    const osc = this.context.createOscillator();
+    osc.type = 'sawtooth';
+    const freq = 120 + Math.random() * 40;
+    osc.frequency.setValueAtTime(freq, t);
+    
+    const filter = this.context.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(400, t);
+
+    const g = this.context.createGain();
+    g.gain.setValueAtTime(0, t);
+    
+    for(let i=0; i<3; i++) {
+        g.gain.linearRampToValueAtTime(0.05, t + i*0.1 + 0.01);
+        g.gain.linearRampToValueAtTime(0, t + i*0.1 + 0.08);
+    }
+    
+    osc.connect(filter);
+    filter.connect(g);
+    g.connect(this.frogsGain);
+    osc.start(t);
+    osc.stop(t + 0.4);
+    setTimeout(() => this.playFrogChirp(), 4000 + Math.random() * 6000);
   }
 
   private playCricketChirp() {
     if (!this.context || !this.cricketsGain || !this.isCricketsActive) return;
     const t = this.context.currentTime;
+    
+    // Suzu-mushi has a crystalline, bell-like ring
+    const freq = 4500 + Math.random() * 200;
     const osc = this.context.createOscillator();
     osc.type = 'sine';
-    const freq = 4000 + Math.random() * 500;
     osc.frequency.setValueAtTime(freq, t);
-    const mod = this.context.createOscillator();
-    mod.type = 'square';
-    mod.frequency.setValueAtTime(50, t); // Chirp frequency
-    const modGain = this.context.createGain();
-    modGain.gain.value = freq * 0.1;
-    mod.connect(modGain);
-    modGain.connect(osc.frequency);
+
     const g = this.context.createGain();
     g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(0.02, t + 0.01);
-    g.gain.linearRampToValueAtTime(0, t + 0.2);
-    osc.connect(g);
+    
+    // Amplitude modulation for the "ri-ri-ri" texture (about 30Hz)
+    const am = this.context.createOscillator();
+    am.type = 'sine';
+    am.frequency.setValueAtTime(30, t);
+    const amGain = this.context.createGain();
+    amGain.gain.value = 0.5; // Depth
+    am.connect(amGain);
+    
+    const vca = this.context.createGain();
+    vca.gain.value = 0.5;
+    amGain.connect(vca.gain);
+
+    osc.connect(vca);
+    vca.connect(g);
     g.connect(this.cricketsGain);
-    mod.start(t);
+    
+    // Pulse duration
+    const duration = 0.8 + Math.random() * 0.4;
+    g.gain.linearRampToValueAtTime(0.04, t + 0.05);
+    g.gain.exponentialRampToValueAtTime(0.001, t + duration);
+
+    am.start(t);
     osc.start(t);
-    mod.stop(t + 0.25);
-    osc.stop(t + 0.25);
-    setTimeout(() => this.playCricketChirp(), 1000 + Math.random() * 4000);
+    am.stop(t + duration);
+    osc.stop(t + duration);
+
+    setTimeout(() => this.playCricketChirp(), 2000 + Math.random() * 3000);
   }
 
   private playFireCrackle() {
@@ -354,7 +415,7 @@ class AudioEngine {
     gain.gain.setValueAtTime(0, t);
     
     // Low frequency compensation
-    const baseGain = frequency < 200 ? 0.7 : 0.5;
+    const baseGain = frequency < 250 ? 0.75 : 0.55;
 
     switch (soundType) {
       case 'Crystal':
@@ -372,21 +433,16 @@ class AudioEngine {
         const oscM1 = this.context.createOscillator();
         oscM1.type = 'sine';
         oscM1.frequency.setValueAtTime(frequency, t);
-        
         const oscM2 = this.context.createOscillator();
         oscM2.type = 'triangle';
         oscM2.frequency.setValueAtTime(frequency * 2.01, t);
-        
         const mGain2 = this.context.createGain();
         mGain2.gain.value = 0.3;
-        
         oscM1.connect(gain);
         oscM2.connect(mGain2);
         mGain2.connect(gain);
-        
         gain.gain.linearRampToValueAtTime(baseGain * 0.8, t + 0.03);
         gain.gain.exponentialRampToValueAtTime(0.001, t + 5.0);
-        
         oscM1.start(t);
         oscM2.start(t);
         oscM1.stop(t + 5.5);
@@ -414,6 +470,135 @@ class AudioEngine {
         gain.gain.exponentialRampToValueAtTime(0.001, t + 8.0);
         oscE1.start(t);
         oscE1.stop(t + 8.5);
+        break;
+
+      case 'Celestial':
+        const oscCel = this.context.createOscillator();
+        oscCel.type = 'sine';
+        oscCel.frequency.setValueAtTime(frequency, t);
+        const celMod = this.context.createOscillator();
+        celMod.type = 'sine';
+        celMod.frequency.setValueAtTime(8, t);
+        const celModGain = this.context.createGain();
+        celModGain.gain.value = 15;
+        celMod.connect(celModGain);
+        celModGain.connect(oscCel.frequency);
+        oscCel.connect(gain);
+        gain.gain.linearRampToValueAtTime(baseGain * 0.6, t + 0.1);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 6.0);
+        celMod.start(t);
+        oscCel.start(t);
+        celMod.stop(t + 6);
+        oscCel.stop(t + 6);
+        break;
+
+      case 'Deep':
+        const oscDeep = this.context.createOscillator();
+        oscDeep.type = 'sine';
+        oscDeep.frequency.setValueAtTime(frequency * 0.5, t);
+        oscDeep.connect(gain);
+        gain.gain.linearRampToValueAtTime(baseGain * 1.5, t + 0.15);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 10.0);
+        oscDeep.start(t);
+        oscDeep.stop(t + 10.5);
+        break;
+
+      case 'Bamboo':
+        const oscBam = this.context.createOscillator();
+        oscBam.type = 'square';
+        oscBam.frequency.setValueAtTime(frequency, t);
+        const bamFilter = this.context.createBiquadFilter();
+        bamFilter.type = 'bandpass';
+        bamFilter.frequency.setValueAtTime(frequency * 2, t);
+        oscBam.connect(bamFilter);
+        bamFilter.connect(gain);
+        gain.gain.linearRampToValueAtTime(baseGain * 2, t + 0.005);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+        oscBam.start(t);
+        oscBam.stop(t + 0.6);
+        break;
+
+      case 'MusicBox':
+        const oscMB = this.context.createOscillator();
+        oscMB.type = 'sine';
+        oscMB.frequency.setValueAtTime(frequency, t);
+        const oscMB2 = this.context.createOscillator();
+        oscMB2.type = 'sine';
+        oscMB2.frequency.setValueAtTime(frequency * 4.001, t);
+        const mb2Gain = this.context.createGain();
+        mb2Gain.gain.value = 0.2;
+        oscMB.connect(gain);
+        oscMB2.connect(mb2Gain);
+        mb2Gain.connect(gain);
+        gain.gain.linearRampToValueAtTime(baseGain * 1.5, t + 0.005);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 1.5);
+        oscMB.start(t);
+        oscMB2.start(t);
+        oscMB.stop(t + 2.0);
+        oscMB2.stop(t + 2.0);
+        break;
+
+      case 'Kalimba':
+        // Bright, pure thumb piano style
+        const kOsc1 = this.context.createOscillator();
+        kOsc1.type = 'sine';
+        kOsc1.frequency.setValueAtTime(frequency, t);
+        const kOsc2 = this.context.createOscillator();
+        kOsc2.type = 'sine';
+        kOsc2.frequency.setValueAtTime(frequency * 3.14, t);
+        const kGain2 = this.context.createGain();
+        kGain2.gain.value = 0.3;
+        kOsc1.connect(gain);
+        kOsc2.connect(kGain2);
+        kGain2.connect(gain);
+        gain.gain.linearRampToValueAtTime(baseGain * 1.8, t + 0.005);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 1.0);
+        kOsc1.start(t);
+        kOsc2.start(t);
+        kOsc1.stop(t + 1.5);
+        kOsc2.stop(t + 1.5);
+        break;
+
+      case 'Flute':
+        // Breathy swell and vibrato
+        const fOsc = this.context.createOscillator();
+        fOsc.type = 'triangle';
+        fOsc.frequency.setValueAtTime(frequency, t);
+        
+        // Breath noise
+        const noise = this.context.createBufferSource();
+        noise.buffer = this.noiseBuffer;
+        const nFilter = this.context.createBiquadFilter();
+        nFilter.type = 'bandpass';
+        nFilter.frequency.setValueAtTime(frequency * 4, t);
+        nFilter.Q.value = 1.0;
+        const nGain = this.context.createGain();
+        nGain.gain.setValueAtTime(0, t);
+        nGain.gain.linearRampToValueAtTime(0.05, t + 0.1);
+        nGain.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+        noise.connect(nFilter);
+        nFilter.connect(nGain);
+        nGain.connect(gain);
+
+        // Vibrato
+        const vib = this.context.createOscillator();
+        vib.frequency.value = 5.5;
+        const vGain = this.context.createGain();
+        vGain.gain.value = frequency * 0.02;
+        vib.connect(vGain);
+        vGain.connect(fOsc.frequency);
+
+        fOsc.connect(gain);
+        gain.gain.linearRampToValueAtTime(0, t);
+        gain.gain.linearRampToValueAtTime(baseGain * 0.8, t + 0.15);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 4.0);
+        
+        vib.start(t);
+        fOsc.start(t);
+        noise.start(t);
+        vib.stop(t + 4.5);
+        fOsc.stop(t + 4.5);
+        noise.stop(t + 4.5);
         break;
     }
     
