@@ -144,6 +144,9 @@ const App: React.FC = () => {
     if (!hasStarted || rainDensity === 0) return;
     const intervalTime = Math.max(300, 3000 - (rainDensity * 2700));
     const timer = setInterval(() => {
+      // FIX: Check if document is hidden to prevent "rain burst" when returning to tab
+      if (document.hidden) return;
+      
       const randomNote = NOTES[Math.floor(Math.random() * NOTES.length)];
       spawnDrop(randomNote.id, false);
     }, intervalTime);
@@ -335,29 +338,35 @@ const App: React.FC = () => {
 
     if (playbackRef.current.active) {
       const now = Date.now();
-      const delta = (now - playbackRef.current.lastCheck) * playbackSpeedRef.current;
-      playbackRef.current.accumulatedTime += delta;
-      playbackRef.current.lastCheck = now;
+      const timeDiff = now - playbackRef.current.lastCheck;
       
-      const { notes, duration, accumulatedTime } = playbackRef.current;
+      // FIX: If the tab was inactive (jump > 250ms), we skip the logic to prevent note burst
+      if (timeDiff < 250) {
+        const delta = timeDiff * playbackSpeedRef.current;
+        playbackRef.current.accumulatedTime += delta;
+        
+        const { notes, duration, accumulatedTime } = playbackRef.current;
 
-      if (isLooping && duration > 0 && accumulatedTime >= duration) {
-        playbackRef.current.accumulatedTime = 0;
-        playbackRef.current.nextIndex = 0;
+        if (isLooping && duration > 0 && accumulatedTime >= duration) {
+          playbackRef.current.accumulatedTime = 0;
+          playbackRef.current.nextIndex = 0;
+        }
+
+        setPlaybackProgress(duration > 0 ? Math.min((accumulatedTime / duration) * 100, 100) : 0);
+
+        let idx = playbackRef.current.nextIndex;
+        while (idx < notes.length && notes[idx].timestamp <= accumulatedTime) {
+          spawnDrop(notes[idx].noteId, false);
+          idx++;
+        }
+        playbackRef.current.nextIndex = idx;
+
+        if (!isLooping && idx >= notes.length && drops.length === 0 && accumulatedTime >= duration + 1000) {
+          stopPlayback();
+        }
       }
-
-      setPlaybackProgress(duration > 0 ? Math.min((accumulatedTime / duration) * 100, 100) : 0);
-
-      let idx = playbackRef.current.nextIndex;
-      while (idx < notes.length && notes[idx].timestamp <= accumulatedTime) {
-        spawnDrop(notes[idx].noteId, false);
-        idx++;
-      }
-      playbackRef.current.nextIndex = idx;
-
-      if (!isLooping && idx >= notes.length && drops.length === 0 && accumulatedTime >= duration + 1000) {
-        stopPlayback();
-      }
+      
+      playbackRef.current.lastCheck = now;
     }
     requestRef.current = requestAnimationFrame(animate);
   };

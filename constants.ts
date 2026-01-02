@@ -126,7 +126,7 @@ export const THEMES: Theme[] = [
   },
   {
     id: 'night_sea',
-    name: '夜의 海 (Night Sea)',
+    name: '夜の海 (Night Sea)',
     bgGradient: 'from-[#020617] via-[#0c4a6e] to-[#020617]',
     bgImage: 'https://images.unsplash.com/photo-1505118380757-91f5f5632de0?auto=format&fit=crop&w=2000&q=80',
     drumColor: 'rgba(12, 74, 110, 0.85)',
